@@ -16,7 +16,7 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Allow requests from our React app
+    allow_origins=["*"],  # Allow requests from any origin
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,9 +52,7 @@ async def generate_tour_guide(location: Location):
         )
 
         print(prompt)
-
-        # Here we would integrate with an AI model to generate tour guide text
-        # For now, we'll use a simple template
+        
         tour_guide_text = f"Welcome to {location.location}!\n\n"
         tour_guide_text += response.text
         tour_guide_text += "FOO done"

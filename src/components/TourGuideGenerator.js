@@ -9,7 +9,7 @@ const TourGuideGenerator = () => {
   const generateTourGuide = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://192.168.0.12:8000/generate-tour-guide', {
+      const response = await fetch('http://localhost:8000/generate-tour-guide', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

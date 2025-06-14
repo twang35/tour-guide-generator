@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 from google import genai
+import re
 
 
 # Load environment variables
@@ -37,25 +38,30 @@ async def generate_tour_guide(location: Location):
 
         # Format the location into the prompt
         prompt = f"""
-        Act as an expert historian and engaging storyteller creating the text for a 5-minute audio tour of {location.location}. 
+        Act as an expert historian and engaging storyteller talking through a 3500 word audio tour of {location.location}. 
         The target audience is someone who is standing in front of {location.location}.
 
-        The tour should be awe-inspiring, informative, and captivating, making the listener feel as if they
-        are walking through {location.location}.
+        The tour should be Informative, captivating, evocative, historical, and engaging.
 
-        Also make sure to add fun facts and interesting details about {location.location}.
+        Also make sure to add quirky fun facts and interesting details. 
+        Do not use stage directions or parenthetical asides or asterisks for emphasis.
         """.format(location=location.location)
+
+        print(prompt)
         
         response = gemini_client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt,
         )
-
-        print(prompt)
         
-        tour_guide_text = f"Welcome to {location.location}!\n\n"
-        tour_guide_text += response.text
-        tour_guide_text += "FOO done"
+        tour_guide_text = response.text
+        
+        print(tour_guide_text)
+
+        # Remove stage directions surrounded by () like (Sound of gentle Andean flute)
+        tour_guide_text = re.sub(r'\s*\(.*?\)\s*', '', tour_guide_text).strip()
+        # Remove asterisks
+        tour_guide_text = re.sub(r'\*', '', tour_guide_text)
         
         return {"tour_guide_text": tour_guide_text}
     except Exception as e:

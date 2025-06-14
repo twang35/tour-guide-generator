@@ -48,7 +48,6 @@ const TourGuideGenerator = () => {
       </div>
       {tourGuideText && (
         <div className="tour-guide-output">
-          <h2>Your Tour Guide Text:</h2>
           <pre>{tourGuideText}</pre>
         </div>
       )}

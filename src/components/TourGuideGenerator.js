@@ -35,9 +35,14 @@ const TourGuideGenerator = () => {
           placeholder="Enter a location..."
           value={location}
           onChange={(e) => setLocation(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !isLoading && location) {
+              generateTourGuide();
+            }
+          }}
           className="location-input"
         />
-        <button onClick={generateTourGuide} disabled={isLoading}>
+        <button onClick={generateTourGuide} disabled={isLoading || !location}>
           {isLoading ? 'Generating...' : 'Generate Tour Guide'}
         </button>
       </div>

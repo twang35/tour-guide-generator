@@ -156,6 +156,28 @@ button:hover:not(:disabled) {
   padding: 1.5rem;
   border-radius: 8px;
   margin-top: 1.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e9ecef;
+}
+
+/* Custom scrollbar styling */
+.tour-guide-output::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tour-guide-output::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.tour-guide-output::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.tour-guide-output::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 h2, h3 {
@@ -169,6 +191,8 @@ pre {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   line-height: 1.6;
   color: #333;
+  margin: 0;
+  padding: 0;
 }
 
 /* Responsive Design */
@@ -193,5 +217,9 @@ pre {
   .speech-btn {
     width: 100%;
     max-width: 200px;
+  }
+  
+  .tour-guide-output {
+    max-height: 300px;
   }
 }

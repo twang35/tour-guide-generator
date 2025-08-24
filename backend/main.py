@@ -59,7 +59,9 @@ async def generate_tour_guide(location: Location):
         print(tour_guide_text)
 
         # Remove stage directions surrounded by () like (Sound of gentle Andean flute)
-        # Replace with a single space to preserve sentence separation
+        # First, handle stage directions that are on their own line (between paragraphs)
+        tour_guide_text = re.sub(r'\n\s*\([^)]*\)\s*\n', '\n\n', tour_guide_text)
+        # Then handle inline stage directions, replace with a single space
         tour_guide_text = re.sub(r'\s*\([^)]*\)\s*', ' ', tour_guide_text)
         # Remove asterisks
         tour_guide_text = re.sub(r'\*', '', tour_guide_text)

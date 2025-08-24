@@ -203,7 +203,7 @@ const TourGuideGenerator = () => {
       // Add paragraph break after each paragraph (except the last one)
       if (paragraphIndex < paragraphs.length - 1) {
         sentences.push({
-          text: '\n\n',
+          text: '\n\n\n',
           paragraphIndex,
           sentenceIndex: -1,
           isParagraphBreak: true
@@ -222,7 +222,7 @@ const TourGuideGenerator = () => {
     
     return sentences.map((sentence, index) => {
       if (sentence.isParagraphBreak) {
-        return <br key={index} />;
+        return <><br key={`br1-${index}`} /><br key={`br2-${index}`} /></>;
       }
       
       return (

@@ -8,7 +8,7 @@ A modern web application that generates tour guide text based on location input.
 ```bash
 cd backend
 conda activate audio-tour
-uvicorn main:app --reload
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 2. In a new terminal, start the frontend development server:

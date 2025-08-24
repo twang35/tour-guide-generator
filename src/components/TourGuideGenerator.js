@@ -19,11 +19,13 @@ const TourGuideGenerator = () => {
       // Wait for voices to load
       const loadVoices = () => {
         const voices = window.speechSynthesis.getVoices();
-        setAvailableVoices(voices);
+        // Filter to only English voices
+        const englishVoices = voices.filter(voice => 
+          voice.lang.startsWith('en')
+        );
+        setAvailableVoices(englishVoices);
         // Set default voice to first available English voice
-        const englishVoice = voices.find(voice => 
-          voice.lang.startsWith('en') && voice.default
-        ) || voices[0];
+        const englishVoice = englishVoices.find(voice => voice.default) || englishVoices[0];
         if (englishVoice) {
           setSelectedVoice(englishVoice.name);
         }

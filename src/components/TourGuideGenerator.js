@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './TourGuideGenerator.css';
+import { getBackendUrl } from '../config';
 
 const TourGuideGenerator = () => {
   const [location, setLocation] = useState('');
@@ -39,21 +40,35 @@ const TourGuideGenerator = () => {
     }
   }, []);
 
+
+
   const generateTourGuide = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/generate-tour-guide', {
+      const backendUrl = getBackendUrl();
+      console.log('Attempting to connect to backend at:', backendUrl);
+      
+      const response = await fetch(`${backendUrl}/generate-tour-guide`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ location }),
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       setTourGuideText(data.tour_guide_text);
     } catch (error) {
       console.error('Error generating tour guide:', error);
-      setTourGuideText('Error generating tour guide text. Please try again.');
+      if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+        setTourGuideText(`Connection error: Unable to connect to backend server. Please ensure the backend server is running on port 8000. Current backend URL: ${getBackendUrl()}`);
+      } else {
+        setTourGuideText(`Error generating tour guide text: ${error.message}`);
+      }
     } finally {
       setIsLoading(false);
     }

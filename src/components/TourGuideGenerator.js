@@ -10,7 +10,9 @@ const TourGuideGenerator = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState('');
   const [availableVoices, setAvailableVoices] = useState([]);
+  const [currentSentenceIndex, setCurrentSentenceIndex] = useState(-1);
   const speechRef = useRef(null);
+  const textContainerRef = useRef(null);
 
   // Initialize speech synthesis and get available voices
   useEffect(() => {
@@ -77,6 +79,7 @@ const TourGuideGenerator = () => {
 
     // Stop any current speech
     window.speechSynthesis.cancel();
+    setCurrentSentenceIndex(-1);
 
     const utterance = new SpeechSynthesisUtterance(tourGuideText);
     
@@ -95,11 +98,13 @@ const TourGuideGenerator = () => {
     utterance.onstart = () => {
       setIsSpeaking(true);
       setIsPaused(false);
+      setCurrentSentenceIndex(0);
     };
 
     utterance.onend = () => {
       setIsSpeaking(false);
       setIsPaused(false);
+      setCurrentSentenceIndex(-1);
     };
 
     utterance.onpause = () => {
@@ -108,6 +113,49 @@ const TourGuideGenerator = () => {
 
     utterance.onresume = () => {
       setIsPaused(false);
+    };
+
+    // Track speech boundaries for highlighting
+    utterance.onboundary = (event) => {
+      console.log('Boundary event:', event.name, event.charIndex);
+      
+      if (event.name === 'sentence' || event.name === 'word') {
+        // Find the sentence index based on character position
+        const sentences = splitIntoSentences(tourGuideText);
+        let currentCharCount = 0;
+        let sentenceIndex = 0;
+        
+        for (let i = 0; i < sentences.length; i++) {
+          if (sentences[i].isParagraphBreak) {
+            currentCharCount += sentences[i].text.length;
+          } else {
+            currentCharCount += sentences[i].text.length + 1; // +1 for the space
+          }
+          
+          if (currentCharCount > event.charIndex) {
+            sentenceIndex = i;
+            break;
+          }
+        }
+        
+        // Only update if it's a sentence boundary or if we're significantly into a new sentence
+        if (event.name === 'sentence' || sentenceIndex !== currentSentenceIndex) {
+          console.log('Setting sentence index to:', sentenceIndex);
+          setCurrentSentenceIndex(sentenceIndex);
+          
+          // Scroll to the highlighted sentence
+          setTimeout(() => {
+            const highlightedElement = document.querySelector('.sentence-highlighted');
+            if (highlightedElement && textContainerRef.current) {
+              highlightedElement.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+                inline: 'nearest'
+              });
+            }
+          }, 100);
+        }
+      }
     };
 
     speechRef.current = utterance;
@@ -130,6 +178,63 @@ const TourGuideGenerator = () => {
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
     setIsPaused(false);
+    setCurrentSentenceIndex(-1);
+  };
+
+  // Split text into sentences for highlighting while preserving paragraph breaks
+  const splitIntoSentences = (text) => {
+    // First split by double line breaks to preserve paragraphs
+    const paragraphs = text.split(/\n\n+/);
+    
+    const sentences = [];
+    paragraphs.forEach((paragraph, paragraphIndex) => {
+      // Split each paragraph into sentences
+      const paragraphSentences = paragraph.split(/(?<=[.!?])\s+/).filter(sentence => sentence.trim().length > 0);
+      
+      paragraphSentences.forEach((sentence, sentenceIndex) => {
+        sentences.push({
+          text: sentence,
+          paragraphIndex,
+          sentenceIndex,
+          isParagraphStart: sentenceIndex === 0
+        });
+      });
+      
+      // Add paragraph break after each paragraph (except the last one)
+      if (paragraphIndex < paragraphs.length - 1) {
+        sentences.push({
+          text: '\n\n',
+          paragraphIndex,
+          sentenceIndex: -1,
+          isParagraphBreak: true
+        });
+      }
+    });
+    
+    return sentences;
+  };
+
+  // Render text with sentence highlighting
+  const renderHighlightedText = (text) => {
+    if (!text) return null;
+    
+    const sentences = splitIntoSentences(text);
+    
+    return sentences.map((sentence, index) => {
+      if (sentence.isParagraphBreak) {
+        return <br key={index} />;
+      }
+      
+      return (
+        <span
+          key={index}
+          className={`sentence ${index === currentSentenceIndex ? 'sentence-highlighted' : ''}`}
+        >
+          {sentence.text}
+          {index < sentences.length - 1 && !sentences[index + 1]?.isParagraphBreak ? ' ' : ''}
+        </span>
+      );
+    });
   };
 
   return (
@@ -215,9 +320,11 @@ const TourGuideGenerator = () => {
             </div>
           </div>
           
-          <div className="tour-guide-output">
+          <div className="tour-guide-output" ref={textContainerRef}>
             <h3>Generated Tour Guide</h3>
-            <pre>{tourGuideText}</pre>
+            <div className="tour-guide-text">
+              {renderHighlightedText(tourGuideText)}
+            </div>
           </div>
         </>
       )}

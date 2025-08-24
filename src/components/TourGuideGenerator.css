@@ -66,9 +66,8 @@ button:hover:not(:disabled) {
 }
 
 .voice-settings {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  display: flex;
+  justify-content: center;
   margin-bottom: 1.5rem;
 }
 
@@ -76,6 +75,7 @@ button:hover:not(:disabled) {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 200px;
 }
 
 .setting-group label {

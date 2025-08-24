@@ -10,8 +10,6 @@ const TourGuideGenerator = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState('');
   const [availableVoices, setAvailableVoices] = useState([]);
-  const [speechRate, setSpeechRate] = useState(1);
-  const [speechPitch, setSpeechPitch] = useState(1);
   const speechRef = useRef(null);
 
   // Initialize speech synthesis and get available voices
@@ -89,8 +87,8 @@ const TourGuideGenerator = () => {
     }
 
     // Set speech properties
-    utterance.rate = speechRate;
-    utterance.pitch = speechPitch;
+    utterance.rate = 1;
+    utterance.pitch = 1;
     utterance.volume = 1;
 
     // Event handlers
@@ -174,36 +172,6 @@ const TourGuideGenerator = () => {
                     </option>
                   ))}
                 </select>
-              </div>
-              
-              <div className="setting-group">
-                <label htmlFor="speech-rate">Speed:</label>
-                <input
-                  id="speech-rate"
-                  type="range"
-                  min="0.5"
-                  max="2"
-                  step="0.1"
-                  value={speechRate}
-                  onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
-                  disabled={isSpeaking}
-                />
-                <span>{speechRate}x</span>
-              </div>
-              
-              <div className="setting-group">
-                <label htmlFor="speech-pitch">Pitch:</label>
-                <input
-                  id="speech-pitch"
-                  type="range"
-                  min="0.5"
-                  max="2"
-                  step="0.1"
-                  value={speechPitch}
-                  onChange={(e) => setSpeechPitch(parseFloat(e.target.value))}
-                  disabled={isSpeaking}
-                />
-                <span>{speechPitch}</span>
               </div>
             </div>
             

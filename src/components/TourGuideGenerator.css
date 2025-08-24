@@ -221,6 +221,109 @@ pre {
   padding: 0;
 }
 
+/* Loading Animation - Spinning Wrench */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  margin: 2rem 0;
+}
+
+.wrench-container {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 1rem;
+}
+
+.wrench {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px;
+  height: 60px;
+  animation: spin 2s linear infinite;
+}
+
+.wrench-head {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 20px;
+  background-color: #3498db;
+  border-radius: 50%;
+  border: 3px solid #2980b9;
+}
+
+.wrench-head::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  background-color: #ecf0f1;
+  border-radius: 50%;
+}
+
+.wrench-handle {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 40px;
+  background-color: #3498db;
+  border: 2px solid #2980b9;
+  border-radius: 4px;
+}
+
+.wrench-handle::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 8px;
+  background-color: #3498db;
+  border: 2px solid #2980b9;
+  border-radius: 4px;
+}
+
+@keyframes spin {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.loading-text {
+  color: #2c3e50;
+  font-size: 1.1rem;
+  font-weight: 500;
+  text-align: center;
+  margin: 0;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .tour-generator-container {
@@ -247,5 +350,35 @@ pre {
   
   .tour-guide-output {
     max-height: 300px;
+  }
+  
+  .wrench-container {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .wrench {
+    width: 45px;
+    height: 45px;
+  }
+  
+  .wrench-head {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .wrench-head::before {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .wrench-handle {
+    width: 6px;
+    height: 30px;
+  }
+  
+  .wrench-handle::after {
+    width: 12px;
+    height: 6px;
   }
 }

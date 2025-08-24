@@ -258,6 +258,18 @@ const TourGuideGenerator = () => {
         </button>
       </div>
       
+      {isLoading && (
+        <div className="loading-container">
+          <div className="wrench-container">
+            <div className="wrench">
+              <div className="wrench-head"></div>
+              <div className="wrench-handle"></div>
+            </div>
+          </div>
+          <p className="loading-text">Creating your tour ...</p>
+        </div>
+      )}
+      
       {tourGuideText && (
         <>
           <div className="speech-controls">
@@ -321,7 +333,6 @@ const TourGuideGenerator = () => {
           </div>
           
           <div className="tour-guide-output" ref={textContainerRef}>
-            <h3>Generated Tour Guide</h3>
             <div className="tour-guide-text">
               {renderHighlightedText(tourGuideText)}
             </div>

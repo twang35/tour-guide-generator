@@ -59,9 +59,14 @@ async def generate_tour_guide(location: Location):
         print(tour_guide_text)
 
         # Remove stage directions surrounded by () like (Sound of gentle Andean flute)
-        tour_guide_text = re.sub(r'\s*\(.*?\)\s*', '', tour_guide_text).strip()
+        # Replace with a single space to preserve sentence separation
+        tour_guide_text = re.sub(r'\s*\([^)]*\)\s*', ' ', tour_guide_text)
         # Remove asterisks
         tour_guide_text = re.sub(r'\*', '', tour_guide_text)
+        # Clean up multiple spaces and ensure proper paragraph breaks
+        tour_guide_text = re.sub(r'\n\s*\n\s*\n', '\n\n\n', tour_guide_text)
+        tour_guide_text = re.sub(r' +', ' ', tour_guide_text)
+        tour_guide_text = tour_guide_text.strip()
         
         return {"tour_guide_text": tour_guide_text}
     except Exception as e:

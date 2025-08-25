@@ -2,7 +2,7 @@
 const config = {
   // Production backend URL
   production: {
-    backendUrl: 'https://tour-guide-generator-backend.onrender.com:8000'
+    backendUrl: 'http://192.168.1.17:8000'
   },
   // Development environment
   development: {

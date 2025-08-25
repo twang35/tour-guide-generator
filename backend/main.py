@@ -29,6 +29,8 @@ class Location(BaseModel):
 @app.post("/generate-tour-guide")
 async def generate_tour_guide(location: Location):
     try:
+        print("Generating tour guide for:", location.location)
+        
         # Get API key from environment
         gemini_api_key = os.getenv("GOOGLE_API_KEY")
         if not gemini_api_key:

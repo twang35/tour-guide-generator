@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Tony's Tours",
+  "name": "Tony's Tours - AI Tour Guide Generator",
   "icons": [
     {
       "src": "favicon.ico",

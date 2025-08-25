@@ -38,7 +38,7 @@ The application will open automatically in your default browser at http://localh
 Also be sure to set up firewall rules for ingress at 0.0.0.0/0 on tcp:3000, 8000
 and egress at 0.0.0.0/0 on tcp:443
 
-```
+```bash
 ### git
 
 which git

@@ -261,7 +261,7 @@ const TourGuideGenerator = () => {
 
   return (
     <div className="tour-generator-container">
-      <h1>Tour Guide Generator</h1>
+      <h1>Tony's Tours</h1>
       <div className="input-container">
         <input
           type="text"
@@ -276,7 +276,7 @@ const TourGuideGenerator = () => {
           className="location-input"
         />
         <button onClick={generateTourGuide} disabled={isLoading || !location}>
-          {isLoading ? 'Generating...' : 'Generate Tour Guide'}
+          {isLoading ? 'Generating...' : 'Generate Tour'}
         </button>
       </div>
       

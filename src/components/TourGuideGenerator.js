@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './TourGuideGenerator.css';
-import { getBackendUrl } from '../config';
+import { getBackendUrl, getFallbackBackendUrl } from '../config';
 
 const TourGuideGenerator = () => {
   const [location, setLocation] = useState('');
@@ -45,10 +45,11 @@ const TourGuideGenerator = () => {
   const generateTourGuide = async () => {
     setIsLoading(true);
     try {
-      const backendUrl = getBackendUrl();
-      console.log('Attempting to connect to backend at:', backendUrl);
+      // Try production backend first
+      const primaryBackendUrl = getBackendUrl();
+      console.log('Attempting to connect to production backend at:', primaryBackendUrl);
       
-      const response = await fetch(`${backendUrl}/generate-tour-guide`, {
+      let response = await fetch(`${primaryBackendUrl}/generate-tour-guide`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -62,12 +63,33 @@ const TourGuideGenerator = () => {
       
       const data = await response.json();
       setTourGuideText(data.tour_guide_text);
+      
     } catch (error) {
-      console.error('Error generating tour guide:', error);
-      if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
-        setTourGuideText(`Connection error: Unable to connect to backend server. Please ensure the backend server is running on port 8000. Current backend URL: ${getBackendUrl()}`);
-      } else {
-        setTourGuideText(`Error generating tour guide text: ${error.message}`);
+      console.error('Production backend failed, trying fallback:', error);
+      
+      try {
+        // Try fallback backend
+        const fallbackBackendUrl = getFallbackBackendUrl();
+        console.log('Attempting to connect to fallback backend at:', fallbackBackendUrl);
+        
+        const response = await fetch(`${fallbackBackendUrl}/generate-tour-guide`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ location }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setTourGuideText(data.tour_guide_text);
+        
+      } catch (fallbackError) {
+        console.error('Fallback backend also failed:', fallbackError);
+        setTourGuideText(`Connection error: Unable to connect to any backend server. Tried: ${getBackendUrl()} and ${getFallbackBackendUrl()}`);
       }
     } finally {
       setIsLoading(false);

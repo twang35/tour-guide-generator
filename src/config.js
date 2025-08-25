@@ -1,17 +1,23 @@
 // Configuration for backend URLs
 const config = {
+  // Production backend URL
+  production: {
+    backendUrl: 'https://tour-guide-generator-backend.onrender.com:8000'
+  },
   // Development environment
   development: {
     backendUrl: 'http://localhost:8000'
-  },
-  // Production environment (you can change this to your actual backend URL)
-  production: {
-    backendUrl: 'http://localhost:8000' // Change this to your production backend URL
   }
 };
 
 // Get the appropriate backend URL based on environment
 export const getBackendUrl = () => {
+  // Always try production first
+  return config.production.backendUrl;
+};
+
+// Fallback function to get alternative backend URLs if production fails
+export const getFallbackBackendUrl = () => {
   // Check if we're in development mode
   if (process.env.NODE_ENV === 'development') {
     // If running on localhost (development), use localhost
@@ -22,8 +28,8 @@ export const getBackendUrl = () => {
     return `http://${window.location.hostname}:8000`;
   }
   
-  // Production environment
-  return config.production.backendUrl;
+  // For production, fall back to localhost if production fails
+  return config.development.backendUrl;
 };
 
 export default config;

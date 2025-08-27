@@ -40,12 +40,19 @@ async def generate_tour_guide(location: Location):
 
         # Format the location into the prompt
         prompt = f"""
-        Act as an expert historian and engaging storyteller talking through a 3500 word audio tour of {location.location}. 
-        The target audience is someone who is standing in front of {location.location}.
+        Act as an expert historian and engaging storyteller giving a 3500-word audio tour of {location.location}.
+        The listener is standing in front of {location.location}.
 
-        The tour should be Informative, captivating, evocative, historical, and engaging.
+        The tour should:
+         * Be highly detailed, factual, and historically accurate, focusing on specific events, dates, people, and architectural or cultural significance.
+         * Maintain an engaging and vivid narrative style, but avoid overly poetic or fluffy language.
+         * Include quirky, surprising, or little-known facts that make the site memorable.
+         * Connect the site to its broader historical, social, or cultural context.
+         * Use clear, descriptive language to help the listener visualize features of the site without exaggeration.
+         * Avoid stage directions, parenthetical asides, and emphasis markers (like asterisks).
 
-        Also make sure to add quirky fun facts and interesting details. 
+        The result should feel like a knowledgeable, passionate historian guiding a curious visitor — rich with facts and insights rather than filler.
+        
         Do not use stage directions or parenthetical asides or asterisks for emphasis.
         """.format(location=location.location)
 

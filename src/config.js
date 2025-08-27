@@ -12,20 +12,19 @@ const config = {
 
 // Get the appropriate backend URL based on environment
 export const getBackendUrl = () => {
-  // Always try production first
+  // Check if we're in development mode
+  if (process.env.NODE_ENV === 'development') {
+    return config.development.backendUrl;
+  }
+  // Default to production
   return config.production.backendUrl;
 };
 
-// Fallback function to get alternative backend URLs if production fails
+// Fallback function to get alternative backend URLs if primary fails
 export const getFallbackBackendUrl = () => {
-  // Check if we're in development mode
+  // If we're in development, try localhost
   if (process.env.NODE_ENV === 'development') {
-    // If running on localhost (development), use localhost
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return config.development.backendUrl;
-    }
-    // If running on a different device, use the same hostname but different port
-    return `http://${window.location.hostname}:8000`;
+    return config.development.backendUrl;
   }
   
   // For production, fall back to localhost if production fails

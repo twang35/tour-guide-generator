@@ -12,6 +12,10 @@ const config = {
 
 // Get the appropriate backend URL based on environment
 export const getBackendUrl = () => {
+  // Check if we're in local environment
+  if (process.env.REACT_APP_ENVIRONMENT === 'local') {
+    return config.development.backendUrl;
+  }
   // Check if we're in development mode
   if (process.env.NODE_ENV === 'local') {
     return config.development.backendUrl;

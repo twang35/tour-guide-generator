@@ -29,6 +29,17 @@ class Location(BaseModel):
 @app.post("/generate-tour-guide")
 async def generate_tour_guide(location: Location):
     try:
+        # Log the location request to /tmp/locations.txt
+        import datetime
+        timestamp = datetime.datetime.now().isoformat()
+        log_entry = f"{timestamp}: {location.location}\n"
+        
+        try:
+            with open("/tmp/locations.txt", "a") as log_file:
+                log_file.write(log_entry)
+        except Exception as log_error:
+            print(f"Failed to write to log file: {log_error}")
+        
         print("Generating tour guide for:", location.location)
         
         # Get API key from environment

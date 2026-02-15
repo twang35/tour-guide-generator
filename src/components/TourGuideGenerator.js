@@ -11,8 +11,13 @@ const TourGuideGenerator = () => {
   const [selectedVoice, setSelectedVoice] = useState('');
   const [availableVoices, setAvailableVoices] = useState([]);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(-1);
+  const [ttsEngine, setTtsEngine] = useState('kokoro');
+  const [kokoroVoice, setKokoroVoice] = useState('am_liam');
+  const [kokoroVoices, setKokoroVoices] = useState([]);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const speechRef = useRef(null);
   const textContainerRef = useRef(null);
+  const audioRef = useRef(null);
 
   // Initialize speech synthesis and get available voices
   useEffect(() => {
@@ -40,7 +45,34 @@ const TourGuideGenerator = () => {
     }
   }, []);
 
+  // Fetch Kokoro voices when engine is set to kokoro
+  useEffect(() => {
+    if (ttsEngine !== 'kokoro' || kokoroVoices.length > 0) return;
 
+    const fetchKokoroVoices = async () => {
+      try {
+        const backendUrl = getBackendUrl();
+        const response = await fetch(`${backendUrl}/kokoro-voices`);
+        if (response.ok) {
+          const data = await response.json();
+          setKokoroVoices(data.voices);
+        }
+      } catch (err) {
+        // Try fallback
+        try {
+          const fallbackUrl = getFallbackBackendUrl();
+          const response = await fetch(`${fallbackUrl}/kokoro-voices`);
+          if (response.ok) {
+            const data = await response.json();
+            setKokoroVoices(data.voices);
+          }
+        } catch (fallbackErr) {
+          console.error('Failed to fetch Kokoro voices:', fallbackErr);
+        }
+      }
+    };
+    fetchKokoroVoices();
+  }, [ttsEngine, kokoroVoices.length]);
 
   const generateTourGuide = async () => {
     setIsLoading(true);
@@ -197,10 +229,97 @@ const TourGuideGenerator = () => {
   };
 
   const stopSpeech = () => {
-    window.speechSynthesis.cancel();
+    if (ttsEngine === 'kokoro') {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    } else {
+      window.speechSynthesis.cancel();
+    }
     setIsSpeaking(false);
     setIsPaused(false);
     setCurrentSentenceIndex(-1);
+  };
+
+  const speakKokoro = async () => {
+    if (!tourGuideText) return;
+
+    // Stop any current playback
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    window.speechSynthesis.cancel();
+
+    setIsGeneratingAudio(true);
+    setCurrentSentenceIndex(-1);
+
+    try {
+      const backendUrl = getBackendUrl();
+      let response;
+      try {
+        response = await fetch(`${backendUrl}/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: tourGuideText, voice: kokoroVoice, speed: 1.0 }),
+        });
+      } catch {
+        const fallbackUrl = getFallbackBackendUrl();
+        response = await fetch(`${fallbackUrl}/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: tourGuideText, voice: kokoroVoice, speed: 1.0 }),
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error(`TTS request failed: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+      }
+      audioRef.current.src = url;
+
+      audioRef.current.onplay = () => {
+        setIsSpeaking(true);
+        setIsPaused(false);
+      };
+      audioRef.current.onpause = () => {
+        if (audioRef.current && audioRef.current.currentTime < audioRef.current.duration) {
+          setIsPaused(true);
+        }
+      };
+      audioRef.current.onended = () => {
+        setIsSpeaking(false);
+        setIsPaused(false);
+        URL.revokeObjectURL(url);
+      };
+
+      await audioRef.current.play();
+    } catch (err) {
+      console.error('Kokoro TTS failed:', err);
+      alert('Failed to generate audio. Make sure the backend is running with Kokoro model files.');
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  };
+
+  const pauseKokoro = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+  };
+
+  const resumeKokoro = () => {
+    if (audioRef.current) {
+      audioRef.current.play();
+      setIsPaused(false);
+    }
   };
 
   // Split text into sentences for highlighting while preserving paragraph breaks
@@ -239,18 +358,19 @@ const TourGuideGenerator = () => {
   // Render text with sentence highlighting
   const renderHighlightedText = (text) => {
     if (!text) return null;
-    
+
     const sentences = splitIntoSentences(text);
-    
+    const enableHighlight = ttsEngine === 'browser';
+
     return sentences.map((sentence, index) => {
       if (sentence.isParagraphBreak) {
         return <><br key={`br1-${index}`} /><br key={`br2-${index}`} /></>;
       }
-      
+
       return (
         <span
           key={index}
-          className={`sentence ${index === currentSentenceIndex ? 'sentence-highlighted' : ''}`}
+          className={`sentence ${enableHighlight && index === currentSentenceIndex ? 'sentence-highlighted' : ''}`}
         >
           {sentence.text}
           {index < sentences.length - 1 && !sentences[index + 1]?.isParagraphBreak ? ' ' : ''}
@@ -296,54 +416,87 @@ const TourGuideGenerator = () => {
           <div className="speech-controls">
             <h3>Audio Controls</h3>
             <div className="voice-settings">
-              <div className="setting-group">
-                <label htmlFor="voice-select">Voice:</label>
+              <div className="setting-group engine-selector">
+                <label htmlFor="engine-select">TTS Engine:</label>
                 <select
-                  id="voice-select"
-                  value={selectedVoice}
-                  onChange={(e) => setSelectedVoice(e.target.value)}
-                  disabled={isSpeaking}
+                  id="engine-select"
+                  value={ttsEngine}
+                  onChange={(e) => {
+                    stopSpeech();
+                    setTtsEngine(e.target.value);
+                  }}
+                  disabled={isSpeaking || isGeneratingAudio}
                 >
-                  {availableVoices.map((voice) => (
-                    <option key={voice.name} value={voice.name}>
-                      {voice.name} ({voice.lang})
-                    </option>
-                  ))}
+                  <option value="browser">Browser TTS</option>
+                  <option value="kokoro">Kokoro TTS</option>
                 </select>
               </div>
+              {ttsEngine === 'browser' ? (
+                <div className="setting-group">
+                  <label htmlFor="voice-select">Voice:</label>
+                  <select
+                    id="voice-select"
+                    value={selectedVoice}
+                    onChange={(e) => setSelectedVoice(e.target.value)}
+                    disabled={isSpeaking}
+                  >
+                    {availableVoices.map((voice) => (
+                      <option key={voice.name} value={voice.name}>
+                        {voice.name} ({voice.lang})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="setting-group">
+                  <label htmlFor="kokoro-voice-select">Voice:</label>
+                  <select
+                    id="kokoro-voice-select"
+                    value={kokoroVoice}
+                    onChange={(e) => setKokoroVoice(e.target.value)}
+                    disabled={isSpeaking || isGeneratingAudio}
+                  >
+                    {kokoroVoices.map((voice) => (
+                      <option key={voice.id} value={voice.id}>
+                        {voice.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
-            
+
             <div className="speech-buttons">
               {!isSpeaking && !isPaused && (
-                <button 
-                  onClick={speakText}
+                <button
+                  onClick={ttsEngine === 'kokoro' ? speakKokoro : speakText}
                   className="speech-btn play-btn"
-                  disabled={!tourGuideText}
+                  disabled={!tourGuideText || isGeneratingAudio}
                 >
-                  🔊 Play Audio
+                  {isGeneratingAudio ? 'Generating audio...' : '🔊 Play Audio'}
                 </button>
               )}
-              
+
               {isSpeaking && !isPaused && (
-                <button 
-                  onClick={pauseSpeech}
+                <button
+                  onClick={ttsEngine === 'kokoro' ? pauseKokoro : pauseSpeech}
                   className="speech-btn pause-btn"
                 >
                   ⏸️ Pause
                 </button>
               )}
-              
+
               {isPaused && (
-                <button 
-                  onClick={resumeSpeech}
+                <button
+                  onClick={ttsEngine === 'kokoro' ? resumeKokoro : resumeSpeech}
                   className="speech-btn resume-btn"
                 >
                   ▶️ Resume
                 </button>
               )}
-              
+
               {(isSpeaking || isPaused) && (
-                <button 
+                <button
                   onClick={stopSpeech}
                   className="speech-btn stop-btn"
                 >

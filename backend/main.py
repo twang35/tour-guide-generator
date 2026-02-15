@@ -1,18 +1,33 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 import requests
 from typing import Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
+import io
 from google import genai
 import re
+import time
 
 
 # Load environment variables
 load_dotenv()
 
 app = FastAPI()
+
+# Lazy-loaded Kokoro model
+_kokoro_instance = None
+
+def get_kokoro():
+    global _kokoro_instance
+    if _kokoro_instance is None:
+        from kokoro_onnx import Kokoro
+        model_path = os.path.join(os.path.dirname(__file__), "kokoro-v1.0.onnx")
+        voices_path = os.path.join(os.path.dirname(__file__), "voices-v1.0.bin")
+        _kokoro_instance = Kokoro(model_path, voices_path)
+    return _kokoro_instance
 
 # Add CORS middleware
 app.add_middleware(
@@ -25,6 +40,33 @@ app.add_middleware(
 
 class Location(BaseModel):
     location: str
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "am_liam"
+    speed: float = 1.0
+
+KOKORO_VOICES = [
+    {"id": "af_heart", "name": "Heart (Female)"},
+    {"id": "af_alloy", "name": "Alloy (Female)"},
+    {"id": "af_aoede", "name": "Aoede (Female)"},
+    {"id": "af_bella", "name": "Bella (Female)"},
+    {"id": "af_jessica", "name": "Jessica (Female)"},
+    {"id": "af_kore", "name": "Kore (Female)"},
+    {"id": "af_nicole", "name": "Nicole (Female)"},
+    {"id": "af_nova", "name": "Nova (Female)"},
+    {"id": "af_river", "name": "River (Female)"},
+    {"id": "af_sarah", "name": "Sarah (Female)"},
+    {"id": "af_sky", "name": "Sky (Female)"},
+    {"id": "am_adam", "name": "Adam (Male)"},
+    {"id": "am_echo", "name": "Echo (Male)"},
+    {"id": "am_eric", "name": "Eric (Male)"},
+    {"id": "am_liam", "name": "Liam (Male)"},
+    {"id": "am_michael", "name": "Michael (Male)"},
+    {"id": "am_onyx", "name": "Onyx (Male)"},
+    {"id": "am_puck", "name": "Puck (Male)"},
+    {"id": "am_santa", "name": "Santa (Male)"},
+]
 
 @app.post("/generate-tour-guide")
 async def generate_tour_guide(location: Location):
@@ -91,6 +133,45 @@ async def generate_tour_guide(location: Location):
         tour_guide_text = tour_guide_text.strip()
         
         return {"tour_guide_text": tour_guide_text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/kokoro-voices")
+async def kokoro_voices():
+    return {"voices": KOKORO_VOICES}
+
+@app.post("/tts")
+async def text_to_speech(req: TTSRequest):
+    try:
+        import soundfile as sf
+        import numpy as np
+
+        request_start = time.time()
+
+        kokoro = get_kokoro()
+
+        gen_start = time.time()
+        samples, sample_rate = kokoro.create(
+            req.text, voice=req.voice, speed=req.speed, lang="en-us"
+        )
+        gen_time = time.time() - gen_start
+
+        wav_start = time.time()
+        buf = io.BytesIO()
+        sf.write(buf, samples, sample_rate, format="WAV")
+        buf.seek(0)
+        wav_time = time.time() - wav_start
+
+        total_time = time.time() - request_start
+        print(f"[TTS] text_length={len(req.text)} voice={req.voice} "
+              f"audio_gen={gen_time:.3f}s wav_encode={wav_time:.3f}s total={total_time:.3f}s")
+
+        return StreamingResponse(buf, media_type="audio/wav")
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=500,
+            detail="Kokoro model files not found. Download kokoro-v1.0.onnx and voices-v1.0.bin into the backend/ directory.",
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

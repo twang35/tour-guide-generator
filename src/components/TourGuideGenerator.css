@@ -69,6 +69,7 @@ button:hover:not(:disabled) {
 .voice-settings {
   display: flex;
   justify-content: center;
+  gap: 1rem;
   margin-bottom: 0.75rem;
 }
 
@@ -97,6 +98,11 @@ button:hover:not(:disabled) {
 .setting-group input[type="range"]:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.engine-selector select {
+  background-color: #eaf4fb;
+  font-weight: 600;
 }
 
 .setting-group span {

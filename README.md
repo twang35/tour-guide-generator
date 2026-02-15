@@ -21,6 +21,13 @@ npm start
 
 The application will open automatically in your default browser at http://localhost:3000.
 
+## Kokoro TTS Setup
+
+Download the following model files into the `backend/` directory:
+
+- `kokoro-v1.0.onnx` — https://github.com/thewh1teagle/kokoro-onnx/releases
+- `voices-v1.0.bin` — https://github.com/thewh1teagle/kokoro-onnx/releases
+
 ## Features
 
 - Enter any location to generate tour guide text

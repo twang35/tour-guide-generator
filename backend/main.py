@@ -112,7 +112,7 @@ async def generate_tour_guide(location: Location):
         print(prompt)
         
         response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3-flash-preview",
             contents=prompt,
         )
         

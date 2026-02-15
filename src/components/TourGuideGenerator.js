@@ -11,6 +11,7 @@ const TourGuideGenerator = () => {
   const [selectedVoice, setSelectedVoice] = useState('');
   const [availableVoices, setAvailableVoices] = useState([]);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(-1);
+  const [currentParagraphIndex, setCurrentParagraphIndex] = useState(-1);
   const [ttsEngine, setTtsEngine] = useState('kokoro');
   const [kokoroVoice, setKokoroVoice] = useState('am_liam');
   const [kokoroVoices, setKokoroVoices] = useState([]);
@@ -18,6 +19,7 @@ const TourGuideGenerator = () => {
   const speechRef = useRef(null);
   const textContainerRef = useRef(null);
   const audioRef = useRef(null);
+  const kokoroAbortRef = useRef(null);
 
   // Initialize speech synthesis and get available voices
   useEffect(() => {
@@ -43,6 +45,18 @@ const TourGuideGenerator = () => {
       // Also listen for voices loaded event
       window.speechSynthesis.onvoiceschanged = loadVoices;
     }
+  }, []);
+
+  // Cleanup Kokoro pipeline on unmount
+  useEffect(() => {
+    return () => {
+      if (kokoroAbortRef.current) {
+        kokoroAbortRef.current.abort();
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
   }, []);
 
   // Fetch Kokoro voices when engine is set to kokoro
@@ -75,6 +89,22 @@ const TourGuideGenerator = () => {
   }, [ttsEngine, kokoroVoices.length]);
 
   const generateTourGuide = async () => {
+    // Stop any running Kokoro pipeline
+    if (kokoroAbortRef.current) {
+      kokoroAbortRef.current.abort();
+      kokoroAbortRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+    setIsPaused(false);
+    setCurrentSentenceIndex(-1);
+    setCurrentParagraphIndex(-1);
+    setIsGeneratingAudio(false);
+
     setIsLoading(true);
     try {
       // Try production backend first
@@ -230,6 +260,10 @@ const TourGuideGenerator = () => {
 
   const stopSpeech = () => {
     if (ttsEngine === 'kokoro') {
+      if (kokoroAbortRef.current) {
+        kokoroAbortRef.current.abort();
+        kokoroAbortRef.current = null;
+      }
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
@@ -240,72 +274,148 @@ const TourGuideGenerator = () => {
     setIsSpeaking(false);
     setIsPaused(false);
     setCurrentSentenceIndex(-1);
+    setCurrentParagraphIndex(-1);
+    setIsGeneratingAudio(false);
+  };
+
+  const fetchTTSAudio = async (text, signal) => {
+    const backendUrl = getBackendUrl();
+    let response;
+    try {
+      response = await fetch(`${backendUrl}/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: kokoroVoice, speed: 1.0 }),
+        signal,
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') throw err;
+      const fallbackUrl = getFallbackBackendUrl();
+      response = await fetch(`${fallbackUrl}/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: kokoroVoice, speed: 1.0 }),
+        signal,
+      });
+    }
+    if (!response.ok) {
+      throw new Error(`TTS request failed: ${response.status}`);
+    }
+    return await response.blob();
   };
 
   const speakKokoro = async () => {
     if (!tourGuideText) return;
 
     // Stop any current playback
+    if (kokoroAbortRef.current) {
+      kokoroAbortRef.current.abort();
+    }
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
     window.speechSynthesis.cancel();
 
+    const abortController = new AbortController();
+    kokoroAbortRef.current = abortController;
+
+    const paragraphs = tourGuideText.split(/\n\n+/).filter(p => p.trim().length > 0);
+    if (paragraphs.length === 0) return;
+
     setIsGeneratingAudio(true);
     setCurrentSentenceIndex(-1);
+    setCurrentParagraphIndex(-1);
+
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+
+    let prefetchPromise = null;
 
     try {
-      const backendUrl = getBackendUrl();
-      let response;
-      try {
-        response = await fetch(`${backendUrl}/tts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: tourGuideText, voice: kokoroVoice, speed: 1.0 }),
-        });
-      } catch {
-        const fallbackUrl = getFallbackBackendUrl();
-        response = await fetch(`${fallbackUrl}/tts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: tourGuideText, voice: kokoroVoice, speed: 1.0 }),
-        });
-      }
+      for (let i = 0; i < paragraphs.length; i++) {
+        if (abortController.signal.aborted) break;
 
-      if (!response.ok) {
-        throw new Error(`TTS request failed: ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-
-      if (!audioRef.current) {
-        audioRef.current = new Audio();
-      }
-      audioRef.current.src = url;
-
-      audioRef.current.onplay = () => {
-        setIsSpeaking(true);
-        setIsPaused(false);
-      };
-      audioRef.current.onpause = () => {
-        if (audioRef.current && audioRef.current.currentTime < audioRef.current.duration) {
-          setIsPaused(true);
+        // Get audio for this paragraph (use pre-fetched result or fetch now)
+        let blob;
+        if (prefetchPromise) {
+          blob = await prefetchPromise;
+          prefetchPromise = null;
         }
-      };
-      audioRef.current.onended = () => {
-        setIsSpeaking(false);
-        setIsPaused(false);
-        URL.revokeObjectURL(url);
-      };
+        if (!blob) {
+          blob = await fetchTTSAudio(paragraphs[i], abortController.signal);
+        }
 
-      await audioRef.current.play();
+        if (abortController.signal.aborted) break;
+
+        // Once we have the first paragraph's audio, we're no longer "generating"
+        if (i === 0) {
+          setIsGeneratingAudio(false);
+        }
+
+        // Start pre-fetching the next paragraph
+        if (i + 1 < paragraphs.length) {
+          prefetchPromise = fetchTTSAudio(paragraphs[i + 1], abortController.signal).catch(err => {
+            if (err.name !== 'AbortError') console.error('Prefetch failed:', err);
+            return null;
+          });
+        }
+
+        const url = URL.createObjectURL(blob);
+        audioRef.current.src = url;
+
+        audioRef.current.onplay = () => {
+          setIsSpeaking(true);
+          setIsPaused(false);
+        };
+        audioRef.current.onpause = () => {
+          if (audioRef.current && audioRef.current.currentTime < audioRef.current.duration) {
+            setIsPaused(true);
+          }
+        };
+
+        setCurrentParagraphIndex(i);
+        await audioRef.current.play();
+
+        // Wait for audio to end or abort
+        await new Promise(resolve => {
+          const onEnded = () => { cleanup(); resolve(); };
+          const onAbort = () => { cleanup(); resolve(); };
+          const cleanup = () => {
+            audioRef.current.removeEventListener('ended', onEnded);
+            abortController.signal.removeEventListener('abort', onAbort);
+          };
+          audioRef.current.addEventListener('ended', onEnded, { once: true });
+          abortController.signal.addEventListener('abort', onAbort, { once: true });
+        });
+
+        URL.revokeObjectURL(url);
+
+        if (abortController.signal.aborted) break;
+
+        // Pause between paragraphs
+        if (i + 1 < paragraphs.length) {
+          await new Promise(resolve => {
+            const timer = setTimeout(resolve, 300);
+            const onAbort = () => { clearTimeout(timer); resolve(); };
+            abortController.signal.addEventListener('abort', onAbort, { once: true });
+          });
+          if (abortController.signal.aborted) break;
+        }
+      }
     } catch (err) {
-      console.error('Kokoro TTS failed:', err);
-      alert('Failed to generate audio. Make sure the backend is running with Kokoro model files.');
+      if (err.name !== 'AbortError') {
+        console.error('Kokoro TTS failed:', err);
+        alert('Failed to generate audio. Make sure the backend is running with Kokoro model files.');
+      }
     } finally {
       setIsGeneratingAudio(false);
+      if (!abortController.signal.aborted) {
+        setIsSpeaking(false);
+        setIsPaused(false);
+        setCurrentParagraphIndex(-1);
+      }
     }
   };
 
@@ -355,22 +465,41 @@ const TourGuideGenerator = () => {
     return sentences;
   };
 
+  // Auto-scroll when current paragraph changes (Kokoro)
+  useEffect(() => {
+    if (currentParagraphIndex >= 0 && ttsEngine === 'kokoro') {
+      setTimeout(() => {
+        const highlightedElement = document.querySelector('.sentence-highlighted');
+        if (highlightedElement && textContainerRef.current) {
+          highlightedElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+            inline: 'nearest'
+          });
+        }
+      }, 100);
+    }
+  }, [currentParagraphIndex, ttsEngine]);
+
   // Render text with sentence highlighting
   const renderHighlightedText = (text) => {
     if (!text) return null;
 
     const sentences = splitIntoSentences(text);
-    const enableHighlight = ttsEngine === 'browser';
 
     return sentences.map((sentence, index) => {
       if (sentence.isParagraphBreak) {
         return <><br key={`br1-${index}`} /><br key={`br2-${index}`} /></>;
       }
 
+      const isBrowserHighlight = ttsEngine === 'browser' && index === currentSentenceIndex;
+      const isKokoroHighlight = ttsEngine === 'kokoro' && currentParagraphIndex >= 0 && sentence.paragraphIndex === currentParagraphIndex;
+      const isHighlighted = isBrowserHighlight || isKokoroHighlight;
+
       return (
         <span
           key={index}
-          className={`sentence ${enableHighlight && index === currentSentenceIndex ? 'sentence-highlighted' : ''}`}
+          className={`sentence ${isHighlighted ? 'sentence-highlighted' : ''}`}
         >
           {sentence.text}
           {index < sentences.length - 1 && !sentences[index + 1]?.isParagraphBreak ? ' ' : ''}

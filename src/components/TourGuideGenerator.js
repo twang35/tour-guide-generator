@@ -283,10 +283,9 @@ const TourGuideGenerator = () => {
       {isLoading && (
         <div className="loading-container">
           <div className="wrench-container">
-            <div className="wrench">
-              <div className="wrench-head"></div>
-              <div className="wrench-handle"></div>
-            </div>
+            <svg className="wrench" viewBox="-1 0 32 31" width="60" height="60">
+              <path d="M28.6 24.9l-15-15c-1.4-1.4-3.4-4.2-4.5-6.5-2.6-1.2-5.5-.6-7.4 1.3L7.2 7.3 5.4 11.1-.2 8.6C-.5 11.2 1 13.9 3.5 15.1c.6 1.4 4.2-3.6 6.3-1.5l15 15a2.65 2.65 0 0 0 3.8-3.7zM28.2 26.8a1.5 1.5 0 1 0-3 0 1.5 1.5 0 1 0 3 0z" fill="#3498db" stroke="#2980b9" strokeWidth="1" fillRule="evenodd"/>
+            </svg>
           </div>
           <p className="loading-text">Creating your tour ...</p>
         </div>

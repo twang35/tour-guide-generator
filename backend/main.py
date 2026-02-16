@@ -103,7 +103,7 @@ async def generate_tour_guide(location: Location):
 
         # Format the location into the prompt
         prompt = f"""
-        Act as an expert historian and engaging storyteller giving a 500-word audio tour of {location.location}.
+        Act as an expert historian and engaging storyteller giving a 3500-word audio tour of {location.location}.
         The listener is standing in front of {location.location}.
 
         The tour should:
@@ -126,7 +126,7 @@ async def generate_tour_guide(location: Location):
         # don't hold resources forever.
         def _call_gemini():
             return gemini_client.models.generate_content(
-                model="gemini-2.5-flash-lite",
+                model="gemini-3-flash-preview",
                 contents=prompt,
             )
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './TourGuideGenerator.css';
 import { getBackendUrl, getFallbackBackendUrl } from '../config';
+import { KokoroWebGPUClient } from '../kokoroWebGPU';
 
 const TourGuideGenerator = () => {
   const [location, setLocation] = useState('');
@@ -12,14 +13,18 @@ const TourGuideGenerator = () => {
   const [availableVoices, setAvailableVoices] = useState([]);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(-1);
   const [currentParagraphIndex, setCurrentParagraphIndex] = useState(-1);
-  const [ttsEngine, setTtsEngine] = useState('kokoro');
+  const [ttsEngine, setTtsEngine] = useState('kokoro-webgpu');
   const [kokoroVoice, setKokoroVoice] = useState('am_liam');
   const [kokoroVoices, setKokoroVoices] = useState([]);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [webgpuSupported, setWebgpuSupported] = useState(false);
+  const [webgpuModelStatus, setWebgpuModelStatus] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'error'
+  const [webgpuLoadProgress, setWebgpuLoadProgress] = useState(null);
   const speechRef = useRef(null);
   const textContainerRef = useRef(null);
   const audioRef = useRef(null);
   const kokoroAbortRef = useRef(null);
+  const kokoroWebGPURef = useRef(null);
 
   // Initialize speech synthesis and get available voices
   useEffect(() => {
@@ -47,6 +52,37 @@ const TourGuideGenerator = () => {
     }
   }, []);
 
+  // Detect WebGPU support and start loading the model immediately on mount
+  useEffect(() => {
+    const initWebGPU = async () => {
+      if (!navigator.gpu) return;
+      try {
+        const adapter = await navigator.gpu.requestAdapter();
+        if (!adapter) return;
+      } catch {
+        return;
+      }
+      setWebgpuSupported(true);
+      setWebgpuModelStatus('loading');
+      setWebgpuLoadProgress(null);
+      try {
+        const client = new KokoroWebGPUClient();
+        kokoroWebGPURef.current = client;
+        await client.init({
+          dtype: 'fp32',
+          onProgress: (progress) => {
+            setWebgpuLoadProgress(progress);
+          },
+        });
+        setWebgpuModelStatus('ready');
+      } catch (err) {
+        console.error('WebGPU model load failed:', err);
+        setWebgpuModelStatus('error');
+      }
+    };
+    initWebGPU();
+  }, []);
+
   // Cleanup Kokoro pipeline on unmount
   useEffect(() => {
     return () => {
@@ -56,12 +92,15 @@ const TourGuideGenerator = () => {
       if (audioRef.current) {
         audioRef.current.pause();
       }
+      if (kokoroWebGPURef.current) {
+        kokoroWebGPURef.current.dispose();
+      }
     };
   }, []);
 
-  // Fetch Kokoro voices when engine is set to kokoro
+  // Fetch Kokoro voices when engine is set to kokoro or kokoro-webgpu
   useEffect(() => {
-    if (ttsEngine !== 'kokoro' || kokoroVoices.length > 0) return;
+    if ((ttsEngine !== 'kokoro' && ttsEngine !== 'kokoro-webgpu') || kokoroVoices.length > 0) return;
 
     const fetchKokoroVoices = async () => {
       try {
@@ -97,6 +136,9 @@ const TourGuideGenerator = () => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+    }
+    if (kokoroWebGPURef.current) {
+      kokoroWebGPURef.current.abortAll();
     }
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
@@ -259,7 +301,7 @@ const TourGuideGenerator = () => {
   };
 
   const stopSpeech = () => {
-    if (ttsEngine === 'kokoro') {
+    if (ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu') {
       if (kokoroAbortRef.current) {
         kokoroAbortRef.current.abort();
         kokoroAbortRef.current = null;
@@ -267,6 +309,9 @@ const TourGuideGenerator = () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
+      }
+      if (ttsEngine === 'kokoro-webgpu' && kokoroWebGPURef.current) {
+        kokoroWebGPURef.current.abortAll();
       }
     } else {
       window.speechSynthesis.cancel();
@@ -432,6 +477,123 @@ const TourGuideGenerator = () => {
     }
   };
 
+  const speakKokoroWebGPU = async () => {
+    if (!tourGuideText) return;
+    const client = kokoroWebGPURef.current;
+    if (!client) return;
+
+    // Stop any current playback
+    if (kokoroAbortRef.current) {
+      kokoroAbortRef.current.abort();
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    window.speechSynthesis.cancel();
+
+    const abortController = new AbortController();
+    kokoroAbortRef.current = abortController;
+
+    const paragraphs = tourGuideText.split(/\n\n+/).filter(p => p.trim().length > 0);
+    if (paragraphs.length === 0) return;
+
+    setIsGeneratingAudio(true);
+    setCurrentSentenceIndex(-1);
+    setCurrentParagraphIndex(-1);
+
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+
+    let prefetchPromise = null;
+
+    try {
+      for (let i = 0; i < paragraphs.length; i++) {
+        if (abortController.signal.aborted) break;
+
+        // Get audio for this paragraph (use pre-fetched result or generate now)
+        let blob;
+        if (prefetchPromise) {
+          blob = await prefetchPromise;
+          prefetchPromise = null;
+        }
+        if (!blob) {
+          blob = await client.generate(paragraphs[i], kokoroVoice, 1.0);
+        }
+
+        if (abortController.signal.aborted) break;
+
+        // Once we have the first paragraph's audio, we're no longer "generating"
+        if (i === 0) {
+          setIsGeneratingAudio(false);
+        }
+
+        // Start pre-fetching the next paragraph
+        if (i + 1 < paragraphs.length) {
+          prefetchPromise = client.generate(paragraphs[i + 1], kokoroVoice, 1.0).catch(err => {
+            if (err.message !== 'Aborted') console.error('Prefetch failed:', err);
+            return null;
+          });
+        }
+
+        const url = URL.createObjectURL(blob);
+        audioRef.current.src = url;
+
+        audioRef.current.onplay = () => {
+          setIsSpeaking(true);
+          setIsPaused(false);
+        };
+        audioRef.current.onpause = () => {
+          if (audioRef.current && audioRef.current.currentTime < audioRef.current.duration) {
+            setIsPaused(true);
+          }
+        };
+
+        setCurrentParagraphIndex(i);
+        await audioRef.current.play();
+
+        // Wait for audio to end or abort
+        await new Promise(resolve => {
+          const onEnded = () => { cleanup(); resolve(); };
+          const onAbort = () => { cleanup(); resolve(); };
+          const cleanup = () => {
+            audioRef.current.removeEventListener('ended', onEnded);
+            abortController.signal.removeEventListener('abort', onAbort);
+          };
+          audioRef.current.addEventListener('ended', onEnded, { once: true });
+          abortController.signal.addEventListener('abort', onAbort, { once: true });
+        });
+
+        URL.revokeObjectURL(url);
+
+        if (abortController.signal.aborted) break;
+
+        // Pause between paragraphs
+        if (i + 1 < paragraphs.length) {
+          await new Promise(resolve => {
+            const timer = setTimeout(resolve, 300);
+            const onAbort = () => { clearTimeout(timer); resolve(); };
+            abortController.signal.addEventListener('abort', onAbort, { once: true });
+          });
+          if (abortController.signal.aborted) break;
+        }
+      }
+    } catch (err) {
+      if (err.message !== 'Aborted') {
+        console.error('Kokoro WebGPU TTS failed:', err);
+        alert('Failed to generate audio with Kokoro WebGPU.');
+      }
+    } finally {
+      setIsGeneratingAudio(false);
+      if (!abortController.signal.aborted) {
+        setIsSpeaking(false);
+        setIsPaused(false);
+        setCurrentParagraphIndex(-1);
+      }
+    }
+  };
+
   // Split text into sentences for highlighting while preserving paragraph breaks
   const splitIntoSentences = (text) => {
     // First split by double line breaks to preserve paragraphs
@@ -467,7 +629,7 @@ const TourGuideGenerator = () => {
 
   // Auto-scroll when current paragraph changes (Kokoro)
   useEffect(() => {
-    if (currentParagraphIndex >= 0 && ttsEngine === 'kokoro') {
+    if (currentParagraphIndex >= 0 && (ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu')) {
       setTimeout(() => {
         const highlightedElement = document.querySelector('.sentence-highlighted');
         if (highlightedElement && textContainerRef.current) {
@@ -493,7 +655,7 @@ const TourGuideGenerator = () => {
       }
 
       const isBrowserHighlight = ttsEngine === 'browser' && index === currentSentenceIndex;
-      const isKokoroHighlight = ttsEngine === 'kokoro' && currentParagraphIndex >= 0 && sentence.paragraphIndex === currentParagraphIndex;
+      const isKokoroHighlight = (ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu') && currentParagraphIndex >= 0 && sentence.paragraphIndex === currentParagraphIndex;
       const isHighlighted = isBrowserHighlight || isKokoroHighlight;
 
       return (
@@ -557,9 +719,63 @@ const TourGuideGenerator = () => {
                   disabled={isSpeaking || isGeneratingAudio}
                 >
                   <option value="browser">Browser TTS</option>
-                  <option value="kokoro">Kokoro TTS</option>
+                  <option value="kokoro">Kokoro (Server)</option>
+                  <option value="kokoro-webgpu" disabled={!webgpuSupported}>
+                    Kokoro WebGPU{!webgpuSupported ? ' (not supported)' : ''}
+                  </option>
                 </select>
               </div>
+              {webgpuModelStatus === 'loading' && ttsEngine === 'kokoro-webgpu' && (
+                <div className="setting-group webgpu-loading">
+                  <label>Model loading...</label>
+                  <div className="webgpu-progress-bar">
+                    <div
+                      className="webgpu-progress-fill"
+                      style={{
+                        width: `${webgpuLoadProgress?.progress != null ? Math.round(webgpuLoadProgress.progress) : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <span>
+                    {webgpuLoadProgress?.progress != null
+                      ? `${Math.round(webgpuLoadProgress.progress)}%`
+                      : 'Initializing...'}
+                    {webgpuLoadProgress?.file ? ` — ${webgpuLoadProgress.file}` : ''}
+                  </span>
+                </div>
+              )}
+              {webgpuModelStatus === 'error' && ttsEngine === 'kokoro-webgpu' && (
+                <div className="setting-group webgpu-error">
+                  <span className="webgpu-error-text">Failed to load model.</span>
+                  <button
+                    className="webgpu-retry-btn"
+                    onClick={async () => {
+                      if (kokoroWebGPURef.current) {
+                        kokoroWebGPURef.current.dispose();
+                        kokoroWebGPURef.current = null;
+                      }
+                      setWebgpuModelStatus('loading');
+                      setWebgpuLoadProgress(null);
+                      try {
+                        const client = new KokoroWebGPUClient();
+                        kokoroWebGPURef.current = client;
+                        await client.init({
+                          dtype: 'fp32',
+                          onProgress: (progress) => {
+                            setWebgpuLoadProgress(progress);
+                          },
+                        });
+                        setWebgpuModelStatus('ready');
+                      } catch (err) {
+                        console.error('WebGPU model load failed:', err);
+                        setWebgpuModelStatus('error');
+                      }
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
               {ttsEngine === 'browser' ? (
                 <div className="setting-group">
                   <label htmlFor="voice-select">Voice:</label>
@@ -576,7 +792,7 @@ const TourGuideGenerator = () => {
                     ))}
                   </select>
                 </div>
-              ) : (
+              ) : (ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu') ? (
                 <div className="setting-group">
                   <label htmlFor="kokoro-voice-select">Voice:</label>
                   <select
@@ -592,23 +808,23 @@ const TourGuideGenerator = () => {
                     ))}
                   </select>
                 </div>
-              )}
+              ) : null}
             </div>
 
             <div className="speech-buttons">
               {!isSpeaking && !isPaused && (
                 <button
-                  onClick={ttsEngine === 'kokoro' ? speakKokoro : speakText}
+                  onClick={ttsEngine === 'kokoro-webgpu' ? speakKokoroWebGPU : ttsEngine === 'kokoro' ? speakKokoro : speakText}
                   className="speech-btn play-btn"
-                  disabled={!tourGuideText || isGeneratingAudio}
+                  disabled={!tourGuideText || isGeneratingAudio || (ttsEngine === 'kokoro-webgpu' && webgpuModelStatus !== 'ready')}
                 >
-                  {isGeneratingAudio ? 'Generating audio...' : '🔊 Play Audio'}
+                  {isGeneratingAudio ? 'Generating audio...' : (ttsEngine === 'kokoro-webgpu' && webgpuModelStatus === 'loading') ? 'Loading model...' : '🔊 Play Audio'}
                 </button>
               )}
 
               {isSpeaking && !isPaused && (
                 <button
-                  onClick={ttsEngine === 'kokoro' ? pauseKokoro : pauseSpeech}
+                  onClick={(ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu') ? pauseKokoro : pauseSpeech}
                   className="speech-btn pause-btn"
                 >
                   ⏸️ Pause
@@ -617,7 +833,7 @@ const TourGuideGenerator = () => {
 
               {isPaused && (
                 <button
-                  onClick={ttsEngine === 'kokoro' ? resumeKokoro : resumeSpeech}
+                  onClick={(ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu') ? resumeKokoro : resumeSpeech}
                   className="speech-btn resume-btn"
                 >
                   ▶️ Resume

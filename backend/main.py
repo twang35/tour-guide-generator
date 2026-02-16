@@ -1,17 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-import requests
-from typing import Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
-import io
 from google import genai
 import re
-import time
 import asyncio
-import threading
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -20,24 +14,8 @@ load_dotenv()
 
 app = FastAPI()
 
-# Dedicated thread pool for Gemini API calls — separate from FastAPI's default
-# pool so text generation doesn't compete with TTS for threads.
+# Dedicated thread pool for Gemini API calls
 _gemini_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gemini")
-
-# Lazy-loaded Kokoro model with thread-safe initialization
-_kokoro_instance = None
-_kokoro_lock = threading.Lock()
-
-def get_kokoro():
-    global _kokoro_instance
-    if _kokoro_instance is None:
-        with _kokoro_lock:
-            if _kokoro_instance is None:
-                from kokoro_onnx import Kokoro
-                model_path = os.path.join(os.path.dirname(__file__), "kokoro-v1.0.int8.onnx")
-                voices_path = os.path.join(os.path.dirname(__file__), "voices-v1.0.bin")
-                _kokoro_instance = Kokoro(model_path, voices_path)
-    return _kokoro_instance
 
 # Add CORS middleware
 app.add_middleware(
@@ -50,11 +28,6 @@ app.add_middleware(
 
 class Location(BaseModel):
     location: str
-
-class TTSRequest(BaseModel):
-    text: str
-    voice: str = "am_liam"
-    speed: float = 1.0
 
 KOKORO_VOICES = [
     {"id": "af_heart", "name": "Heart (Female)"},
@@ -170,43 +143,6 @@ async def generate_tour_guide(location: Location):
 @app.get("/kokoro-voices")
 async def kokoro_voices():
     return {"voices": KOKORO_VOICES}
-
-@app.post("/tts")
-def text_to_speech(req: TTSRequest):
-    try:
-        import soundfile as sf
-        import numpy as np
-
-        request_start = time.time()
-
-        kokoro = get_kokoro()
-
-        gen_start = time.time()
-        samples, sample_rate = kokoro.create(
-            req.text, voice=req.voice, speed=req.speed, lang="en-us"
-        )
-        gen_time = time.time() - gen_start
-
-        wav_start = time.time()
-        buf = io.BytesIO()
-        sf.write(buf, samples, sample_rate, format="WAV")
-        buf.seek(0)
-        wav_time = time.time() - wav_start
-
-        total_time = time.time() - request_start
-        print(f"[TTS] text_length={len(req.text)} voice={req.voice} "
-              f"audio_gen={gen_time:.3f}s wav_encode={wav_time:.3f}s total={total_time:.3f}s")
-
-        return StreamingResponse(buf, media_type="audio/wav")
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=500,
-            detail="Kokoro model files not found. Download kokoro-v1.0.onnx and voices-v1.0.bin into the backend/ directory.",
-        )
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

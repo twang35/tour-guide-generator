@@ -99,9 +99,9 @@ const TourGuideGenerator = () => {
     };
   }, []);
 
-  // Fetch Kokoro voices when engine is set to kokoro or kokoro-webgpu
+  // Fetch Kokoro voices when engine is set to kokoro-webgpu
   useEffect(() => {
-    if ((ttsEngine !== 'kokoro' && ttsEngine !== 'kokoro-webgpu') || kokoroVoices.length > 0) return;
+    if (ttsEngine !== 'kokoro-webgpu' || kokoroVoices.length > 0) return;
 
     const fetchKokoroVoices = async () => {
       try {
@@ -327,7 +327,7 @@ const TourGuideGenerator = () => {
   };
 
   const stopSpeech = () => {
-    if (ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu') {
+    if (ttsEngine === 'kokoro-webgpu') {
       if (kokoroAbortRef.current) {
         kokoroAbortRef.current.abort();
         kokoroAbortRef.current = null;
@@ -336,7 +336,7 @@ const TourGuideGenerator = () => {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
       }
-      if (ttsEngine === 'kokoro-webgpu' && kokoroWebGPURef.current) {
+      if (kokoroWebGPURef.current) {
         kokoroWebGPURef.current.abortAll();
       }
     } else {
@@ -347,156 +347,6 @@ const TourGuideGenerator = () => {
     setCurrentSentenceIndex(-1);
     setCurrentParagraphIndex(-1);
     setIsGeneratingAudio(false);
-  };
-
-  const fetchTTSAudio = async (text, signal) => {
-    const backendUrl = getBackendUrl();
-    let response;
-    try {
-      response = await fetch(`${backendUrl}/tts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: kokoroVoice, speed: 1.0 }),
-        signal,
-      });
-    } catch (err) {
-      if (err.name === 'AbortError') throw err;
-      const fallbackUrl = getFallbackBackendUrl();
-      response = await fetch(`${fallbackUrl}/tts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: kokoroVoice, speed: 1.0 }),
-        signal,
-      });
-    }
-    if (!response.ok) {
-      throw new Error(`TTS request failed: ${response.status}`);
-    }
-    return await response.blob();
-  };
-
-  const speakKokoro = async () => {
-    if (!tourGuideText) return;
-
-    // Stop any current playback
-    if (kokoroAbortRef.current) {
-      kokoroAbortRef.current.abort();
-    }
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    window.speechSynthesis.cancel();
-
-    const abortController = new AbortController();
-    kokoroAbortRef.current = abortController;
-
-    const paragraphs = tourGuideText.split(/\n\n+/).filter(p => p.trim().length > 0);
-    if (paragraphs.length === 0) return;
-
-    setIsGeneratingAudio(true);
-    setCurrentSentenceIndex(-1);
-    setCurrentParagraphIndex(-1);
-
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-    }
-
-    let prefetchPromise = null;
-
-    try {
-      for (let i = 0; i < paragraphs.length; i++) {
-        if (abortController.signal.aborted) break;
-
-        // Get audio for this paragraph (use pre-fetched result or fetch now)
-        let blob;
-        if (prefetchPromise) {
-          const prefetchStart = performance.now();
-          blob = await prefetchPromise;
-          console.log(`[AudioGen] Paragraph ${i + 1}/${paragraphs.length} (prefetched, waited ${(performance.now() - prefetchStart).toFixed(0)}ms)`);
-          prefetchPromise = null;
-        }
-        if (!blob) {
-          const audioGenStart = performance.now();
-          blob = await fetchTTSAudio(paragraphs[i], abortController.signal);
-          console.log(`[AudioGen] Paragraph ${i + 1}/${paragraphs.length} generated in ${(performance.now() - audioGenStart).toFixed(0)}ms (${paragraphs[i].length} chars)`);
-        }
-
-        if (abortController.signal.aborted) break;
-
-        // Once we have the first paragraph's audio, we're no longer "generating"
-        if (i === 0) {
-          setIsGeneratingAudio(false);
-        }
-
-        // Start pre-fetching the next paragraph
-        if (i + 1 < paragraphs.length) {
-          const prefetchIdx = i + 1;
-          const prefetchGenStart = performance.now();
-          prefetchPromise = fetchTTSAudio(paragraphs[prefetchIdx], abortController.signal).then(result => {
-            console.log(`[AudioGen] Paragraph ${prefetchIdx + 1}/${paragraphs.length} prefetch completed in ${(performance.now() - prefetchGenStart).toFixed(0)}ms (${paragraphs[prefetchIdx].length} chars)`);
-            return result;
-          }).catch(err => {
-            if (err.name !== 'AbortError') console.error('Prefetch failed:', err);
-            return null;
-          });
-        }
-
-        const url = URL.createObjectURL(blob);
-        audioRef.current.src = url;
-
-        audioRef.current.onplay = () => {
-          setIsSpeaking(true);
-          setIsPaused(false);
-        };
-        audioRef.current.onpause = () => {
-          if (audioRef.current && audioRef.current.currentTime < audioRef.current.duration) {
-            setIsPaused(true);
-          }
-        };
-
-        setCurrentParagraphIndex(i);
-        await audioRef.current.play();
-
-        // Wait for audio to end or abort
-        await new Promise(resolve => {
-          const onEnded = () => { cleanup(); resolve(); };
-          const onAbort = () => { cleanup(); resolve(); };
-          const cleanup = () => {
-            audioRef.current.removeEventListener('ended', onEnded);
-            abortController.signal.removeEventListener('abort', onAbort);
-          };
-          audioRef.current.addEventListener('ended', onEnded, { once: true });
-          abortController.signal.addEventListener('abort', onAbort, { once: true });
-        });
-
-        URL.revokeObjectURL(url);
-
-        if (abortController.signal.aborted) break;
-
-        // Pause between paragraphs
-        if (i + 1 < paragraphs.length) {
-          await new Promise(resolve => {
-            const timer = setTimeout(resolve, 300);
-            const onAbort = () => { clearTimeout(timer); resolve(); };
-            abortController.signal.addEventListener('abort', onAbort, { once: true });
-          });
-          if (abortController.signal.aborted) break;
-        }
-      }
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('Kokoro TTS failed:', err);
-        alert('Failed to generate audio. Make sure the backend is running with Kokoro model files.');
-      }
-    } finally {
-      setIsGeneratingAudio(false);
-      if (!abortController.signal.aborted) {
-        setIsSpeaking(false);
-        setIsPaused(false);
-        setCurrentParagraphIndex(-1);
-      }
-    }
   };
 
   const pauseKokoro = () => {
@@ -680,7 +530,7 @@ const TourGuideGenerator = () => {
 
   // Auto-scroll when current paragraph changes (Kokoro)
   useEffect(() => {
-    if (currentParagraphIndex >= 0 && (ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu')) {
+    if (currentParagraphIndex >= 0 && ttsEngine === 'kokoro-webgpu') {
       setTimeout(() => {
         const highlightedElement = document.querySelector('.sentence-highlighted');
         if (highlightedElement && textContainerRef.current) {
@@ -706,7 +556,7 @@ const TourGuideGenerator = () => {
       }
 
       const isBrowserHighlight = ttsEngine === 'browser' && index === currentSentenceIndex;
-      const isKokoroHighlight = (ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu') && currentParagraphIndex >= 0 && sentence.paragraphIndex === currentParagraphIndex;
+      const isKokoroHighlight = ttsEngine === 'kokoro-webgpu' && currentParagraphIndex >= 0 && sentence.paragraphIndex === currentParagraphIndex;
       const isHighlighted = isBrowserHighlight || isKokoroHighlight;
 
       return (
@@ -770,7 +620,6 @@ const TourGuideGenerator = () => {
                   disabled={isSpeaking || isGeneratingAudio}
                 >
                   <option value="browser">Browser TTS</option>
-                  <option value="kokoro">Kokoro (Server)</option>
                   <option value="kokoro-webgpu" disabled={!webgpuSupported}>
                     Kokoro WebGPU{!webgpuSupported ? ' (not supported)' : ''}
                   </option>
@@ -843,7 +692,7 @@ const TourGuideGenerator = () => {
                     ))}
                   </select>
                 </div>
-              ) : (ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu') ? (
+              ) : ttsEngine === 'kokoro-webgpu' ? (
                 <div className="setting-group">
                   <label htmlFor="kokoro-voice-select">Voice:</label>
                   <select
@@ -865,7 +714,7 @@ const TourGuideGenerator = () => {
             <div className="speech-buttons">
               {!isSpeaking && !isPaused && (
                 <button
-                  onClick={ttsEngine === 'kokoro-webgpu' ? speakKokoroWebGPU : ttsEngine === 'kokoro' ? speakKokoro : speakText}
+                  onClick={ttsEngine === 'kokoro-webgpu' ? speakKokoroWebGPU : speakText}
                   className="speech-btn play-btn"
                   disabled={!tourGuideText || isGeneratingAudio || (ttsEngine === 'kokoro-webgpu' && webgpuModelStatus !== 'ready')}
                 >
@@ -875,7 +724,7 @@ const TourGuideGenerator = () => {
 
               {isSpeaking && !isPaused && (
                 <button
-                  onClick={(ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu') ? pauseKokoro : pauseSpeech}
+                  onClick={ttsEngine === 'kokoro-webgpu' ? pauseKokoro : pauseSpeech}
                   className="speech-btn pause-btn"
                 >
                   ⏸️ Pause
@@ -884,7 +733,7 @@ const TourGuideGenerator = () => {
 
               {isPaused && (
                 <button
-                  onClick={(ttsEngine === 'kokoro' || ttsEngine === 'kokoro-webgpu') ? resumeKokoro : resumeSpeech}
+                  onClick={ttsEngine === 'kokoro-webgpu' ? resumeKokoro : resumeSpeech}
                   className="speech-btn resume-btn"
                 >
                   ▶️ Resume

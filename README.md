@@ -72,8 +72,24 @@ disown
 echo 'export GOOGLE_API_KEY="your_api_key_here"' >> ~/.bashrc
 
 ### Download Kokoro files
-wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
-wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
+mkdir -p tour-guide-generator/public/kokoro-local/resolve/main && cd "$_"
+# Create directories                                                                                                                                                                                                                                                    
+mkdir -p onnx voices
+
+# Config files (small)
+curl -L -o config.json "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/config.json"
+curl -L -o tokenizer.json "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/tokenizer.json"
+curl -L -o tokenizer_config.json "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/tokenizer_config.json"
+
+# ONNX models (large — pick the ones you need)
+curl -L -o onnx/model.onnx "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model.onnx"                     # 326 MB, fp32
+curl -L -o onnx/model_fp16.onnx "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model_fp16.onnx"           # 163 MB, fp16
+curl -L -o onnx/model_quantized.onnx "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model_quantized.onnx" # 92 MB, q8
+curl -L -o onnx/model_q4.onnx "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model_q4.onnx"               # 305 MB, q4
+curl -L -o onnx/model_q4f16.onnx "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model_q4f16.onnx"         # 155 MB, q4f16
+curl -L -o onnx/model_q8f16.onnx "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model_q8f16.onnx"         # 86 MB, q8f16
+curl -L -o onnx/model_uint8.onnx "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model_uint8.onnx"         # 178 MB, uint8
+curl -L -o onnx/model_uint8f16.onnx "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model_uint8f16.onnx"   # 114 MB, uint8f16
 
 ### pip and uvicorn
 conda install pip

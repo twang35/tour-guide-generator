@@ -34,7 +34,7 @@ def get_kokoro():
         with _kokoro_lock:
             if _kokoro_instance is None:
                 from kokoro_onnx import Kokoro
-                model_path = os.path.join(os.path.dirname(__file__), "kokoro-v1.0.onnx")
+                model_path = os.path.join(os.path.dirname(__file__), "kokoro-v1.0.int8.onnx")
                 voices_path = os.path.join(os.path.dirname(__file__), "voices-v1.0.bin")
                 _kokoro_instance = Kokoro(model_path, voices_path)
     return _kokoro_instance

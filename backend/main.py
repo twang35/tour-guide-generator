@@ -10,6 +10,9 @@ import io
 from google import genai
 import re
 import time
+import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 
 # Load environment variables
@@ -17,16 +20,23 @@ load_dotenv()
 
 app = FastAPI()
 
-# Lazy-loaded Kokoro model
+# Dedicated thread pool for Gemini API calls — separate from FastAPI's default
+# pool so text generation doesn't compete with TTS for threads.
+_gemini_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gemini")
+
+# Lazy-loaded Kokoro model with thread-safe initialization
 _kokoro_instance = None
+_kokoro_lock = threading.Lock()
 
 def get_kokoro():
     global _kokoro_instance
     if _kokoro_instance is None:
-        from kokoro_onnx import Kokoro
-        model_path = os.path.join(os.path.dirname(__file__), "kokoro-v1.0.onnx")
-        voices_path = os.path.join(os.path.dirname(__file__), "voices-v1.0.bin")
-        _kokoro_instance = Kokoro(model_path, voices_path)
+        with _kokoro_lock:
+            if _kokoro_instance is None:
+                from kokoro_onnx import Kokoro
+                model_path = os.path.join(os.path.dirname(__file__), "kokoro-v1.0.onnx")
+                voices_path = os.path.join(os.path.dirname(__file__), "voices-v1.0.bin")
+                _kokoro_instance = Kokoro(model_path, voices_path)
     return _kokoro_instance
 
 # Add CORS middleware
@@ -69,21 +79,21 @@ KOKORO_VOICES = [
 ]
 
 @app.post("/generate-tour-guide")
-def generate_tour_guide(location: Location):
+async def generate_tour_guide(location: Location):
     try:
         # Log the location request to /tmp/locations.txt
         import datetime
         timestamp = datetime.datetime.now().isoformat()
         log_entry = f"{timestamp}: {location.location}\n"
-        
+
         try:
             with open("/tmp/locations.txt", "a") as log_file:
                 log_file.write(log_entry)
         except Exception as log_error:
             print(f"Failed to write to log file: {log_error}")
-        
+
         print("Generating tour guide for:", location.location)
-        
+
         # Get API key from environment
         gemini_api_key = os.getenv("GOOGLE_API_KEY")
         if not gemini_api_key:
@@ -105,20 +115,32 @@ def generate_tour_guide(location: Location):
          * Avoid stage directions, parenthetical asides, and emphasis markers (like asterisks).
 
         The result should feel like a knowledgeable, passionate historian guiding a curious visitor — rich with facts and insights rather than filler.
-        
+
         Do not use stage directions or parenthetical asides or asterisks for emphasis.
         """.format(location=location.location)
 
         print(prompt)
-        
-        response = gemini_client.models.generate_content(
-            # model="gemini-3-flash-preview",
-            model="gemini-2.5-flash-lite",
-            contents=prompt,
-        )
-        
+
+        # Run the blocking Gemini API call in a dedicated thread pool so it
+        # doesn't compete with TTS threads, and add a timeout so hung requests
+        # don't hold resources forever.
+        def _call_gemini():
+            return gemini_client.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=prompt,
+            )
+
+        loop = asyncio.get_event_loop()
+        try:
+            response = await asyncio.wait_for(
+                loop.run_in_executor(_gemini_executor, _call_gemini),
+                timeout=90,
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Text generation timed out — please try again")
+
         tour_guide_text = response.text
-        
+
         print(tour_guide_text)
 
         # Remove stage directions surrounded by () like (Sound of gentle Andean flute)
@@ -132,8 +154,10 @@ def generate_tour_guide(location: Location):
         tour_guide_text = re.sub(r'\n\s*\n\s*\n', '\n\n\n', tour_guide_text)
         tour_guide_text = re.sub(r' +', ' ', tour_guide_text)
         tour_guide_text = tour_guide_text.strip()
-        
+
         return {"tour_guide_text": tour_guide_text}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

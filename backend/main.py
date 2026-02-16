@@ -198,6 +198,8 @@ def text_to_speech(req: TTSRequest):
             detail="Kokoro model files not found. Download kokoro-v1.0.onnx and voices-v1.0.bin into the backend/ directory.",
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

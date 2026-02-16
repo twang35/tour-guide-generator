@@ -2,7 +2,7 @@
 const config = {
   // Production backend URL
   production: {
-    backendUrl: 'http://35.247.83.89:8000'
+    backendUrl: 'http://35.233.170.111:8000'
   },
   // Development environment
   development: {

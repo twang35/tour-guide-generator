@@ -25,6 +25,7 @@ const TourGuideGenerator = () => {
   const audioRef = useRef(null);
   const kokoroAbortRef = useRef(null);
   const kokoroWebGPURef = useRef(null);
+  const prefetchedFirstParaRef = useRef(null); // { promise, voice } for first paragraph audio
 
   // Initialize speech synthesis and get available voices
   useEffect(() => {
@@ -127,6 +128,24 @@ const TourGuideGenerator = () => {
     fetchKokoroVoices();
   }, [ttsEngine, kokoroVoices.length]);
 
+  const prefetchFirstParagraphAudio = (text) => {
+    prefetchedFirstParaRef.current = null;
+    const client = kokoroWebGPURef.current;
+    if (!client || webgpuModelStatus !== 'ready') return;
+    const firstPara = text.split(/\n\n+/).filter(p => p.trim().length > 0)[0];
+    if (!firstPara) return;
+    const voice = kokoroVoice;
+    const startTime = performance.now();
+    const promise = client.generate(firstPara, voice, 1.0).then(blob => {
+      console.log(`[AudioGen:WebGPU] First paragraph prefetched in ${(performance.now() - startTime).toFixed(0)}ms (${firstPara.length} chars)`);
+      return blob;
+    }).catch(err => {
+      console.warn('[AudioGen:WebGPU] First paragraph prefetch failed:', err);
+      return null;
+    });
+    prefetchedFirstParaRef.current = { promise, voice };
+  };
+
   const generateTourGuide = async () => {
     // Stop any running Kokoro pipeline
     if (kokoroAbortRef.current) {
@@ -140,6 +159,7 @@ const TourGuideGenerator = () => {
     if (kokoroWebGPURef.current) {
       kokoroWebGPURef.current.abortAll();
     }
+    prefetchedFirstParaRef.current = null;
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
     setIsPaused(false);
@@ -153,6 +173,7 @@ const TourGuideGenerator = () => {
       const primaryBackendUrl = getBackendUrl();
       console.log('Attempting to connect to production backend at:', primaryBackendUrl);
       
+      const textGenStart = performance.now();
       let response = await fetch(`${primaryBackendUrl}/generate-tour-guide`, {
         method: 'POST',
         headers: {
@@ -160,14 +181,16 @@ const TourGuideGenerator = () => {
         },
         body: JSON.stringify({ location }),
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
+      console.log(`[TextGen] Generated tour text in ${(performance.now() - textGenStart).toFixed(0)}ms`);
       setTourGuideText(data.tour_guide_text);
-      
+      prefetchFirstParagraphAudio(data.tour_guide_text);
+
     } catch (error) {
       console.error('Production backend failed, trying fallback:', error);
       
@@ -176,6 +199,7 @@ const TourGuideGenerator = () => {
         const fallbackBackendUrl = getFallbackBackendUrl();
         console.log('Attempting to connect to fallback backend at:', fallbackBackendUrl);
         
+        const textGenStartFallback = performance.now();
         const response = await fetch(`${fallbackBackendUrl}/generate-tour-guide`, {
           method: 'POST',
           headers: {
@@ -183,14 +207,16 @@ const TourGuideGenerator = () => {
           },
           body: JSON.stringify({ location }),
         });
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
+        console.log(`[TextGen] Generated tour text (fallback) in ${(performance.now() - textGenStartFallback).toFixed(0)}ms`);
         setTourGuideText(data.tour_guide_text);
-        
+        prefetchFirstParagraphAudio(data.tour_guide_text);
+
       } catch (fallbackError) {
         console.error('Fallback backend also failed:', fallbackError);
         setTourGuideText(`Connection error: Unable to connect to any backend server. Tried: ${getBackendUrl()} and ${getFallbackBackendUrl()}`);
@@ -385,11 +411,15 @@ const TourGuideGenerator = () => {
         // Get audio for this paragraph (use pre-fetched result or fetch now)
         let blob;
         if (prefetchPromise) {
+          const prefetchStart = performance.now();
           blob = await prefetchPromise;
+          console.log(`[AudioGen] Paragraph ${i + 1}/${paragraphs.length} (prefetched, waited ${(performance.now() - prefetchStart).toFixed(0)}ms)`);
           prefetchPromise = null;
         }
         if (!blob) {
+          const audioGenStart = performance.now();
           blob = await fetchTTSAudio(paragraphs[i], abortController.signal);
+          console.log(`[AudioGen] Paragraph ${i + 1}/${paragraphs.length} generated in ${(performance.now() - audioGenStart).toFixed(0)}ms (${paragraphs[i].length} chars)`);
         }
 
         if (abortController.signal.aborted) break;
@@ -401,7 +431,12 @@ const TourGuideGenerator = () => {
 
         // Start pre-fetching the next paragraph
         if (i + 1 < paragraphs.length) {
-          prefetchPromise = fetchTTSAudio(paragraphs[i + 1], abortController.signal).catch(err => {
+          const prefetchIdx = i + 1;
+          const prefetchGenStart = performance.now();
+          prefetchPromise = fetchTTSAudio(paragraphs[prefetchIdx], abortController.signal).then(result => {
+            console.log(`[AudioGen] Paragraph ${prefetchIdx + 1}/${paragraphs.length} prefetch completed in ${(performance.now() - prefetchGenStart).toFixed(0)}ms (${paragraphs[prefetchIdx].length} chars)`);
+            return result;
+          }).catch(err => {
             if (err.name !== 'AbortError') console.error('Prefetch failed:', err);
             return null;
           });
@@ -508,6 +543,13 @@ const TourGuideGenerator = () => {
 
     let prefetchPromise = null;
 
+    // Check if we have a prefetched first paragraph from text generation
+    const prefetched = prefetchedFirstParaRef.current;
+    if (prefetched && prefetched.voice === kokoroVoice) {
+      prefetchPromise = prefetched.promise;
+    }
+    prefetchedFirstParaRef.current = null;
+
     try {
       for (let i = 0; i < paragraphs.length; i++) {
         if (abortController.signal.aborted) break;
@@ -515,11 +557,15 @@ const TourGuideGenerator = () => {
         // Get audio for this paragraph (use pre-fetched result or generate now)
         let blob;
         if (prefetchPromise) {
+          const prefetchStart = performance.now();
           blob = await prefetchPromise;
+          console.log(`[AudioGen:WebGPU] Paragraph ${i + 1}/${paragraphs.length} (prefetched, waited ${(performance.now() - prefetchStart).toFixed(0)}ms)`);
           prefetchPromise = null;
         }
         if (!blob) {
+          const audioGenStart = performance.now();
           blob = await client.generate(paragraphs[i], kokoroVoice, 1.0);
+          console.log(`[AudioGen:WebGPU] Paragraph ${i + 1}/${paragraphs.length} generated in ${(performance.now() - audioGenStart).toFixed(0)}ms (${paragraphs[i].length} chars)`);
         }
 
         if (abortController.signal.aborted) break;
@@ -531,7 +577,12 @@ const TourGuideGenerator = () => {
 
         // Start pre-fetching the next paragraph
         if (i + 1 < paragraphs.length) {
-          prefetchPromise = client.generate(paragraphs[i + 1], kokoroVoice, 1.0).catch(err => {
+          const prefetchIdx = i + 1;
+          const prefetchGenStart = performance.now();
+          prefetchPromise = client.generate(paragraphs[prefetchIdx], kokoroVoice, 1.0).then(result => {
+            console.log(`[AudioGen:WebGPU] Paragraph ${prefetchIdx + 1}/${paragraphs.length} prefetch completed in ${(performance.now() - prefetchGenStart).toFixed(0)}ms (${paragraphs[prefetchIdx].length} chars)`);
+            return result;
+          }).catch(err => {
             if (err.message !== 'Aborted') console.error('Prefetch failed:', err);
             return null;
           });

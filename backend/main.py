@@ -69,7 +69,7 @@ KOKORO_VOICES = [
 ]
 
 @app.post("/generate-tour-guide")
-async def generate_tour_guide(location: Location):
+def generate_tour_guide(location: Location):
     try:
         # Log the location request to /tmp/locations.txt
         import datetime
@@ -141,7 +141,7 @@ async def kokoro_voices():
     return {"voices": KOKORO_VOICES}
 
 @app.post("/tts")
-async def text_to_speech(req: TTSRequest):
+def text_to_speech(req: TTSRequest):
     try:
         import soundfile as sf
         import numpy as np

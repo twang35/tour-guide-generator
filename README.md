@@ -68,8 +68,12 @@ nohup npm start > /tmp/npm.log 2>&1 &
 disown
 
 ### Google API key
-# Get key from https://console.cloud.google.com/apis/credentials/key/f14d623f-5f93-4a61-a863-a0b4b208527f?project=gen-lang-client-0306919185
+# Get the gemini API key from https://aistudio.google.com/api-keys
 echo 'export GOOGLE_API_KEY="your_api_key_here"' >> ~/.bashrc
+
+### Download Kokoro files
+wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
+wget https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
 
 ### pip and uvicorn
 conda install pip
@@ -80,7 +84,34 @@ cd backend
 pip install -r requirements.txt
 nohup uvicorn main:app --reload --host 0.0.0.0 --port 8000 > /tmp/uvicorn.log 2>&1 &
 disown
-
-# to view processes
-ps -ef
 ```
+
+# Update server
+### Kill old instances
+
+`ps -ef`
+
+kill each of the following processes: 
+* /home/g35tonywang/miniconda3/envs/tonys-tours/bin/python3.13 /home/g35tonywang/miniconda3/envs/tonys-tours/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8000
+* /usr/bin/node /home/g35tonywang/tour-guide-generator/node_modules/react-scripts/scripts/start.js
+
+### Update code
+`cd ~/tour-guide-generator`
+
+`git pull`
+
+### Restart servers
+
+`conda env activate tonys-tours`
+
+If dependencies were changed: `pip install -r requirements.txt`
+
+`nohup npm start > /tmp/npm.log 2>&1 &`
+
+`disown`
+
+`cd backend`
+
+`nohup uvicorn main:app --reload --host 0.0.0.0 --port 8000 > /tmp/uvicorn.log 2>&1 &`
+
+`disown`

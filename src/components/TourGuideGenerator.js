@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './TourGuideGenerator.css';
-import { getBackendUrl, getFallbackBackendUrl } from '../config';
 import { KokoroWebGPUClient } from '../kokoroWebGPU';
+
+const BACKEND_URL = '/api';
 
 const KOKORO_VOICES = [
   { id: 'af_heart', name: 'Heart (Female)' },
@@ -162,7 +163,7 @@ const TourGuideGenerator = () => {
     setIsLoading(true);
     try {
       // Try production backend first
-      const primaryBackendUrl = getBackendUrl();
+      const primaryBackendUrl = BACKEND_URL;
       console.log('Attempting to connect to production backend at:', primaryBackendUrl);
       
       const textGenStart = performance.now();
@@ -188,7 +189,7 @@ const TourGuideGenerator = () => {
       
       try {
         // Try fallback backend
-        const fallbackBackendUrl = getFallbackBackendUrl();
+        const fallbackBackendUrl = BACKEND_URL;
         console.log('Attempting to connect to fallback backend at:', fallbackBackendUrl);
         
         const textGenStartFallback = performance.now();
@@ -211,7 +212,7 @@ const TourGuideGenerator = () => {
 
       } catch (fallbackError) {
         console.error('Fallback backend also failed:', fallbackError);
-        setTourGuideText(`Connection error: Unable to connect to any backend server. Tried: ${getBackendUrl()} and ${getFallbackBackendUrl()}`);
+        setTourGuideText('Connection error: Unable to connect to the backend server.');
       }
     } finally {
       setIsLoading(false);

@@ -1,10 +1,10 @@
 // Configuration for backend URLs
 const config = {
-  // Production backend URL
+  // Production backend URL — uses /api prefix, reverse-proxied by Caddy to port 8000
   production: {
-    backendUrl: 'http://35.233.170.111:8000'
+    backendUrl: '/api'
   },
-  // Development environment
+  // Development environment — direct connection to backend
   development: {
     backendUrl: 'http://localhost:8000'
   }
@@ -12,27 +12,18 @@ const config = {
 
 // Get the appropriate backend URL based on environment
 export const getBackendUrl = () => {
-  // Check if we're in local environment
-  if (process.env.REACT_APP_ENVIRONMENT === 'local') {
+  if (process.env.REACT_APP_ENVIRONMENT === 'local' || process.env.NODE_ENV === 'development') {
     return config.development.backendUrl;
   }
-  // Check if we're in development mode
-  if (process.env.NODE_ENV === 'local') {
-    return config.development.backendUrl;
-  }
-  // Default to production
   return config.production.backendUrl;
 };
 
 // Fallback function to get alternative backend URLs if primary fails
 export const getFallbackBackendUrl = () => {
-  // If we're in development, try localhost
   if (process.env.NODE_ENV === 'development') {
     return config.development.backendUrl;
   }
-  
-  // For production, fall back to localhost if production fails
-  return config.development.backendUrl;
+  return config.production.backendUrl;
 };
 
 export default config;

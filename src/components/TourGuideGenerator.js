@@ -3,6 +3,28 @@ import './TourGuideGenerator.css';
 import { getBackendUrl, getFallbackBackendUrl } from '../config';
 import { KokoroWebGPUClient } from '../kokoroWebGPU';
 
+const KOKORO_VOICES = [
+  { id: 'af_heart', name: 'Heart (Female)' },
+  { id: 'af_alloy', name: 'Alloy (Female)' },
+  { id: 'af_aoede', name: 'Aoede (Female)' },
+  { id: 'af_bella', name: 'Bella (Female)' },
+  { id: 'af_jessica', name: 'Jessica (Female)' },
+  { id: 'af_kore', name: 'Kore (Female)' },
+  { id: 'af_nicole', name: 'Nicole (Female)' },
+  { id: 'af_nova', name: 'Nova (Female)' },
+  { id: 'af_river', name: 'River (Female)' },
+  { id: 'af_sarah', name: 'Sarah (Female)' },
+  { id: 'af_sky', name: 'Sky (Female)' },
+  { id: 'am_adam', name: 'Adam (Male)' },
+  { id: 'am_echo', name: 'Echo (Male)' },
+  { id: 'am_eric', name: 'Eric (Male)' },
+  { id: 'am_liam', name: 'Liam (Male)' },
+  { id: 'am_michael', name: 'Michael (Male)' },
+  { id: 'am_onyx', name: 'Onyx (Male)' },
+  { id: 'am_puck', name: 'Puck (Male)' },
+  { id: 'am_santa', name: 'Santa (Male)' },
+];
+
 const TourGuideGenerator = () => {
   const [location, setLocation] = useState('');
   const [tourGuideText, setTourGuideText] = useState('');
@@ -15,7 +37,6 @@ const TourGuideGenerator = () => {
   const [currentParagraphIndex, setCurrentParagraphIndex] = useState(-1);
   const [ttsEngine, setTtsEngine] = useState('kokoro-webgpu');
   const [kokoroVoice, setKokoroVoice] = useState('am_liam');
-  const [kokoroVoices, setKokoroVoices] = useState([]);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [webgpuSupported, setWebgpuSupported] = useState(false);
   const [webgpuModelStatus, setWebgpuModelStatus] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'error'
@@ -98,35 +119,6 @@ const TourGuideGenerator = () => {
       }
     };
   }, []);
-
-  // Fetch Kokoro voices when engine is set to kokoro-webgpu
-  useEffect(() => {
-    if (ttsEngine !== 'kokoro-webgpu' || kokoroVoices.length > 0) return;
-
-    const fetchKokoroVoices = async () => {
-      try {
-        const backendUrl = getBackendUrl();
-        const response = await fetch(`${backendUrl}/kokoro-voices`);
-        if (response.ok) {
-          const data = await response.json();
-          setKokoroVoices(data.voices);
-        }
-      } catch (err) {
-        // Try fallback
-        try {
-          const fallbackUrl = getFallbackBackendUrl();
-          const response = await fetch(`${fallbackUrl}/kokoro-voices`);
-          if (response.ok) {
-            const data = await response.json();
-            setKokoroVoices(data.voices);
-          }
-        } catch (fallbackErr) {
-          console.error('Failed to fetch Kokoro voices:', fallbackErr);
-        }
-      }
-    };
-    fetchKokoroVoices();
-  }, [ttsEngine, kokoroVoices.length]);
 
   const prefetchFirstParagraphAudio = (text) => {
     prefetchedFirstParaRef.current = null;
@@ -701,7 +693,7 @@ const TourGuideGenerator = () => {
                     onChange={(e) => setKokoroVoice(e.target.value)}
                     disabled={isSpeaking || isGeneratingAudio}
                   >
-                    {kokoroVoices.map((voice) => (
+                    {KOKORO_VOICES.map((voice) => (
                       <option key={voice.id} value={voice.id}>
                         {voice.name}
                       </option>

@@ -29,28 +29,6 @@ app.add_middleware(
 class Location(BaseModel):
     location: str
 
-KOKORO_VOICES = [
-    {"id": "af_heart", "name": "Heart (Female)"},
-    {"id": "af_alloy", "name": "Alloy (Female)"},
-    {"id": "af_aoede", "name": "Aoede (Female)"},
-    {"id": "af_bella", "name": "Bella (Female)"},
-    {"id": "af_jessica", "name": "Jessica (Female)"},
-    {"id": "af_kore", "name": "Kore (Female)"},
-    {"id": "af_nicole", "name": "Nicole (Female)"},
-    {"id": "af_nova", "name": "Nova (Female)"},
-    {"id": "af_river", "name": "River (Female)"},
-    {"id": "af_sarah", "name": "Sarah (Female)"},
-    {"id": "af_sky", "name": "Sky (Female)"},
-    {"id": "am_adam", "name": "Adam (Male)"},
-    {"id": "am_echo", "name": "Echo (Male)"},
-    {"id": "am_eric", "name": "Eric (Male)"},
-    {"id": "am_liam", "name": "Liam (Male)"},
-    {"id": "am_michael", "name": "Michael (Male)"},
-    {"id": "am_onyx", "name": "Onyx (Male)"},
-    {"id": "am_puck", "name": "Puck (Male)"},
-    {"id": "am_santa", "name": "Santa (Male)"},
-]
-
 @app.post("/generate-tour-guide")
 async def generate_tour_guide(location: Location):
     try:
@@ -139,10 +117,6 @@ async def generate_tour_guide(location: Location):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/kokoro-voices")
-async def kokoro_voices():
-    return {"voices": KOKORO_VOICES}
 
 if __name__ == "__main__":
     import uvicorn

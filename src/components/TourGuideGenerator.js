@@ -42,6 +42,7 @@ const TourGuideGenerator = () => {
   const [webgpuSupported, setWebgpuSupported] = useState(false);
   const [webgpuModelStatus, setWebgpuModelStatus] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'error'
   const [webgpuLoadProgress, setWebgpuLoadProgress] = useState(null);
+  const [webgpuModelSource, setWebgpuModelSource] = useState(null);
   const speechRef = useRef(null);
   const textContainerRef = useRef(null);
   const audioRef = useRef(null);
@@ -76,8 +77,11 @@ const TourGuideGenerator = () => {
   }, []);
 
   // Detect WebGPU support and start loading the model immediately on mount
+  const webgpuInitStarted = useRef(false);
   useEffect(() => {
     const initWebGPU = async () => {
+      if (webgpuInitStarted.current) return;
+      webgpuInitStarted.current = true;
       if (!navigator.gpu) return;
       try {
         const adapter = await navigator.gpu.requestAdapter();
@@ -95,6 +99,9 @@ const TourGuideGenerator = () => {
           dtype: 'fp32',
           onProgress: (progress) => {
             setWebgpuLoadProgress(progress);
+          },
+          onSourceChange: (info) => {
+            setWebgpuModelSource(info.source);
           },
         });
         setWebgpuModelStatus('ready');
@@ -620,7 +627,13 @@ const TourGuideGenerator = () => {
               </div>
               {webgpuModelStatus === 'loading' && ttsEngine === 'kokoro-webgpu' && (
                 <div className="setting-group webgpu-loading">
-                  <label>Model loading...</label>
+                  <label>
+                    {webgpuModelSource === 'hub'
+                      ? 'Loading model from Hugging Face...'
+                      : webgpuModelSource === 'local'
+                        ? 'Loading model from local server...'
+                        : 'Model loading...'}
+                  </label>
                   <div className="webgpu-progress-bar">
                     <div
                       className="webgpu-progress-fill"
@@ -649,6 +662,7 @@ const TourGuideGenerator = () => {
                       }
                       setWebgpuModelStatus('loading');
                       setWebgpuLoadProgress(null);
+                      setWebgpuModelSource(null);
                       try {
                         const client = new KokoroWebGPUClient();
                         kokoroWebGPURef.current = client;
@@ -656,6 +670,9 @@ const TourGuideGenerator = () => {
                           dtype: 'fp32',
                           onProgress: (progress) => {
                             setWebgpuLoadProgress(progress);
+                          },
+                          onSourceChange: (info) => {
+                            setWebgpuModelSource(info.source);
                           },
                         });
                         setWebgpuModelStatus('ready');

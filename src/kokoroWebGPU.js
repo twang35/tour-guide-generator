@@ -5,16 +5,18 @@ export class KokoroWebGPUClient {
     this.worker = null;
     this.pending = new Map(); // id -> { resolve, reject }
     this.onProgress = null;
+    this.onSourceChange = null;
   }
 
   static isSupported() {
     return typeof navigator !== 'undefined' && !!navigator.gpu;
   }
 
-  async init({ dtype = 'fp32', onProgress } = {}) {
+  async init({ dtype = 'fp32', onProgress, onSourceChange } = {}) {
     if (this.worker) return;
 
     this.onProgress = onProgress || null;
+    this.onSourceChange = onSourceChange || null;
 
     this.worker = new Worker(
       new URL('./kokoroWebGPUWorker.js', import.meta.url),
@@ -26,6 +28,11 @@ export class KokoroWebGPUClient {
 
       if (type === 'init-progress') {
         if (this.onProgress) this.onProgress(payload);
+        return;
+      }
+
+      if (type === 'init-source') {
+        if (this.onSourceChange) this.onSourceChange(payload);
         return;
       }
 

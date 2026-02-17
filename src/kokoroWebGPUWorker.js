@@ -2,12 +2,18 @@
 import { KokoroTTS } from 'kokoro-js';
 import { env } from '@huggingface/transformers';
 
-// Point the transformers library at our local static files
-// so it fetches model artifacts from our own server instead of HuggingFace Hub.
-// The default path template is '{model}/resolve/{revision}/{file}', so files
-// live under public/kokoro-local/resolve/main/*.
-env.remoteHost = self.location.origin;
 env.allowLocalModels = false;
+
+const HF_MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
+const LOCAL_MODEL_ID = 'kokoro-local';
+
+function configureForHub() {
+  env.remoteHost = 'https://huggingface.co/';
+}
+
+function configureForLocal() {
+  env.remoteHost = self.location.origin;
+}
 
 let tts = null;
 
@@ -18,18 +24,33 @@ self.onmessage = async (e) => {
     case 'init': {
       try {
         const dtype = payload?.dtype || 'fp32';
-        tts = await KokoroTTS.from_pretrained(
-          'kokoro-local',
-          {
-            dtype,
-            device: 'webgpu',
-            progress_callback: (progress) => {
-              self.postMessage({ type: 'init-progress', id, payload: progress });
-            },
-          }
-        );
+        const progressCb = (progress) => {
+          self.postMessage({ type: 'init-progress', id, payload: progress });
+        };
+
+        let source = 'hub';
+        try {
+          configureForHub();
+          console.log('[KokoroWorker] Attempting to load model from Hugging Face Hub:', HF_MODEL_ID);
+          self.postMessage({ type: 'init-source', id, payload: { source: 'hub' } });
+          tts = await KokoroTTS.from_pretrained(HF_MODEL_ID, {
+            dtype, device: 'webgpu', progress_callback: progressCb,
+          });
+        } catch (hubErr) {
+          console.warn('HF Hub load failed, falling back to local:', hubErr.message);
+          source = 'local';
+          self.postMessage({ type: 'init-source', id, payload: { source: 'local' } });
+          self.postMessage({ type: 'init-progress', id, payload: { status: 'progress', progress: 0 } });
+          configureForLocal();
+          console.log('[KokoroWorker] Attempting to load model from local server:', LOCAL_MODEL_ID);
+          tts = await KokoroTTS.from_pretrained(LOCAL_MODEL_ID, {
+            dtype, device: 'webgpu', progress_callback: progressCb,
+          });
+        }
+
         const voices = tts.list_voices();
-        self.postMessage({ type: 'init-done', id, payload: { voices } });
+        console.log('[KokoroWorker] Model loaded successfully from:', source);
+        self.postMessage({ type: 'init-done', id, payload: { voices, source } });
       } catch (err) {
         self.postMessage({
           type: 'init-error',

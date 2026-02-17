@@ -91,6 +91,26 @@ curl -L -o onnx/model_q8f16.onnx "https://huggingface.co/onnx-community/Kokoro-8
 curl -L -o onnx/model_uint8.onnx "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model_uint8.onnx"         # 178 MB, uint8
 curl -L -o onnx/model_uint8f16.onnx "https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model_uint8f16.onnx"   # 114 MB, uint8f16
 
+### Caddy https certs and routing
+sudo apt install -y caddy
+
+sudo nano /etc/caddy/Caddyfile
+
+#### replace Caddyfile with this:
+tours.tony-wang.com {
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy localhost:8000
+    }
+    handle {
+        root * /home/g35tonywang/tour-guide-generator/build
+        try_files {path} /index.html
+        file_server
+    }
+}
+ 
+sudo systemctl restart caddy
+
 ### pip and uvicorn
 conda install pip
 

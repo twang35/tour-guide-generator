@@ -168,10 +168,10 @@ const TourGuideGenerator = () => {
     setIsGeneratingAudio(false);
 
     setIsLoading(true);
+    console.log('[TextGen] Starting text generation for location:', location);
     try {
       // Try production backend first
       const primaryBackendUrl = BACKEND_URL;
-      console.log('Attempting to connect to production backend at:', primaryBackendUrl);
       
       const textGenStart = performance.now();
       let response = await fetch(`${primaryBackendUrl}/generate-tour-guide`, {
@@ -383,6 +383,7 @@ const TourGuideGenerator = () => {
     const paragraphs = tourGuideText.split(/\n\n+/).filter(p => p.trim().length > 0);
     if (paragraphs.length === 0) return;
 
+    console.log(`[AudioGen:WebGPU] Starting audio generation (${paragraphs.length} paragraphs, voice: ${kokoroVoice})`);
     setIsGeneratingAudio(true);
     setCurrentSentenceIndex(-1);
     setCurrentParagraphIndex(-1);

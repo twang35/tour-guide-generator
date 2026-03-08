@@ -103,9 +103,7 @@ tours.tony-wang.com {
         reverse_proxy localhost:8000
     }
     handle {
-        root * /home/g35tonywang/tour-guide-generator/build
-        try_files {path} /index.html
-        file_server
+        reverse_proxy localhost:3000
     }
 }
  

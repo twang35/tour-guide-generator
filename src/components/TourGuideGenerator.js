@@ -29,7 +29,8 @@ const KOKORO_VOICES = [
 ];
 
 const TourGuideGenerator = () => {
-  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+  const isMobile = window.matchMedia('(max-width: 768px)').matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  console.log(`[Mobile Detection] isMobile=${isMobile}, screenWidth=${window.innerWidth}, userAgent=${navigator.userAgent}`);
 
   const [location, setLocation] = useState('');
   const [tourGuideText, setTourGuideText] = useState('');

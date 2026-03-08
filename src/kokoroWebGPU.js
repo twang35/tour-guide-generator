@@ -12,7 +12,7 @@ export class KokoroWebGPUClient {
     return typeof navigator !== 'undefined' && !!navigator.gpu;
   }
 
-  async init({ dtype = 'fp32', onProgress, onSourceChange } = {}) {
+  async init({ onProgress, onSourceChange } = {}) {
     if (this.worker) return;
 
     this.onProgress = onProgress || null;
@@ -52,7 +52,7 @@ export class KokoroWebGPUClient {
       console.error('KokoroWebGPU worker error:', err);
     };
 
-    const result = await this._send('init', { dtype });
+    const result = await this._send('init', {});
     return result.voices;
   }
 

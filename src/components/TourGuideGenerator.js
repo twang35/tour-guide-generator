@@ -3,6 +3,8 @@ import './TourGuideGenerator.css';
 import { KokoroWebGPUClient } from '../kokoroWebGPU';
 
 const BACKEND_URL = '/api';
+// am_liam, af_heart
+const DEFAULT_KOKORO_VOICE = 'am_liam';
 
 const KOKORO_VOICES = [
   { id: 'af_heart', name: 'Heart (Female)' },
@@ -37,7 +39,7 @@ const TourGuideGenerator = () => {
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(-1);
   const [currentParagraphIndex, setCurrentParagraphIndex] = useState(-1);
   const [ttsEngine, setTtsEngine] = useState('kokoro-webgpu');
-  const [kokoroVoice, setKokoroVoice] = useState('am_liam');
+  const [kokoroVoice, setKokoroVoice] = useState(DEFAULT_KOKORO_VOICE);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [webgpuSupported, setWebgpuSupported] = useState(false);
   const [webgpuModelStatus, setWebgpuModelStatus] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'error'
@@ -96,7 +98,6 @@ const TourGuideGenerator = () => {
         const client = new KokoroWebGPUClient();
         kokoroWebGPURef.current = client;
         await client.init({
-          dtype: 'fp32',
           onProgress: (progress) => {
             setWebgpuLoadProgress(progress);
           },
@@ -668,7 +669,6 @@ const TourGuideGenerator = () => {
                         const client = new KokoroWebGPUClient();
                         kokoroWebGPURef.current = client;
                         await client.init({
-                          dtype: 'fp32',
                           onProgress: (progress) => {
                             setWebgpuLoadProgress(progress);
                           },

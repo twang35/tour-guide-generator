@@ -31,6 +31,32 @@ const KOKORO_VOICES = [
 const isMobile = window.matchMedia('(max-width: 768px)').matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 console.log(`[Mobile Detection] isMobile=${isMobile}, screenWidth=${window.innerWidth}, userAgent=${navigator.userAgent}`);
 
+const MAX_CHUNK_CHARS = 450;
+
+function chunkTextBySentences(text) {
+  const paragraphs = text.split(/\n\n+/).filter(p => p.trim().length > 0);
+  const chunks = [];
+
+  for (let pi = 0; pi < paragraphs.length; pi++) {
+    const sentences = paragraphs[pi].split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
+    let current = '';
+
+    for (const sentence of sentences) {
+      if (current && (current.length + 1 + sentence.length) > MAX_CHUNK_CHARS) {
+        chunks.push({ text: current, paragraphIndex: pi });
+        current = sentence;
+      } else {
+        current = current ? current + ' ' + sentence : sentence;
+      }
+    }
+    if (current) {
+      chunks.push({ text: current, paragraphIndex: pi });
+    }
+  }
+
+  return chunks;
+}
+
 const TourGuideGenerator = () => {
   const [location, setLocation] = useState('');
   const [tourGuideText, setTourGuideText] = useState('');
@@ -137,15 +163,15 @@ const TourGuideGenerator = () => {
     prefetchedFirstParaRef.current = null;
     const client = kokoroWebGPURef.current;
     if (!client || webgpuModelStatus !== 'ready') return;
-    const firstPara = text.split(/\n\n+/).filter(p => p.trim().length > 0)[0];
-    if (!firstPara) return;
+    const firstChunk = chunkTextBySentences(text)[0];
+    if (!firstChunk) return;
     const voice = kokoroVoice;
     const startTime = performance.now();
-    const promise = client.generate(firstPara, voice, 1.0).then(blob => {
-      console.log(`[AudioGen:WebGPU] First paragraph prefetched in ${(performance.now() - startTime).toFixed(0)}ms (${firstPara.length} chars)`);
+    const promise = client.generate(firstChunk.text, voice, 1.0).then(blob => {
+      console.log(`[AudioGen:WebGPU] First chunk prefetched in ${(performance.now() - startTime).toFixed(0)}ms (${firstChunk.text.length} chars)`);
       return blob;
     }).catch(err => {
-      console.warn('[AudioGen:WebGPU] First paragraph prefetch failed:', err);
+      console.warn('[AudioGen:WebGPU] First chunk prefetch failed:', err);
       return null;
     });
     prefetchedFirstParaRef.current = { promise, voice };
@@ -385,10 +411,10 @@ const TourGuideGenerator = () => {
     const abortController = new AbortController();
     kokoroAbortRef.current = abortController;
 
-    const paragraphs = tourGuideText.split(/\n\n+/).filter(p => p.trim().length > 0);
-    if (paragraphs.length === 0) return;
+    const chunks = chunkTextBySentences(tourGuideText);
+    if (chunks.length === 0) return;
 
-    console.log(`[AudioGen:WebGPU] Starting audio generation (${paragraphs.length} paragraphs, voice: ${kokoroVoice})`);
+    console.log(`[AudioGen:WebGPU] Starting audio generation (${chunks.length} chunks, voice: ${kokoroVoice})`);
     setIsGeneratingAudio(true);
     setCurrentSentenceIndex(-1);
     setCurrentParagraphIndex(-1);
@@ -407,36 +433,36 @@ const TourGuideGenerator = () => {
     prefetchedFirstParaRef.current = null;
 
     try {
-      for (let i = 0; i < paragraphs.length; i++) {
+      for (let i = 0; i < chunks.length; i++) {
         if (abortController.signal.aborted) break;
 
-        // Get audio for this paragraph (use pre-fetched result or generate now)
+        // Get audio for this chunk (use pre-fetched result or generate now)
         let blob;
         if (prefetchPromise) {
           const prefetchStart = performance.now();
           blob = await prefetchPromise;
-          console.log(`[AudioGen:WebGPU] Paragraph ${i + 1}/${paragraphs.length} (prefetched, waited ${(performance.now() - prefetchStart).toFixed(0)}ms)`);
+          console.log(`[AudioGen:WebGPU] Chunk ${i + 1}/${chunks.length} (prefetched, waited ${(performance.now() - prefetchStart).toFixed(0)}ms)`);
           prefetchPromise = null;
         }
         if (!blob) {
           const audioGenStart = performance.now();
-          blob = await client.generate(paragraphs[i], kokoroVoice, 1.0);
-          console.log(`[AudioGen:WebGPU] Paragraph ${i + 1}/${paragraphs.length} generated in ${(performance.now() - audioGenStart).toFixed(0)}ms (${paragraphs[i].length} chars)`);
+          blob = await client.generate(chunks[i].text, kokoroVoice, 1.0);
+          console.log(`[AudioGen:WebGPU] Chunk ${i + 1}/${chunks.length} generated in ${(performance.now() - audioGenStart).toFixed(0)}ms (${chunks[i].text.length} chars)`);
         }
 
         if (abortController.signal.aborted) break;
 
-        // Once we have the first paragraph's audio, we're no longer "generating"
+        // Once we have the first chunk's audio, we're no longer "generating"
         if (i === 0) {
           setIsGeneratingAudio(false);
         }
 
-        // Start pre-fetching the next paragraph
-        if (i + 1 < paragraphs.length) {
+        // Start pre-fetching the next chunk
+        if (i + 1 < chunks.length) {
           const prefetchIdx = i + 1;
           const prefetchGenStart = performance.now();
-          prefetchPromise = client.generate(paragraphs[prefetchIdx], kokoroVoice, 1.0).then(result => {
-            console.log(`[AudioGen:WebGPU] Paragraph ${prefetchIdx + 1}/${paragraphs.length} prefetch completed in ${(performance.now() - prefetchGenStart).toFixed(0)}ms (${paragraphs[prefetchIdx].length} chars)`);
+          prefetchPromise = client.generate(chunks[prefetchIdx].text, kokoroVoice, 1.0).then(result => {
+            console.log(`[AudioGen:WebGPU] Chunk ${prefetchIdx + 1}/${chunks.length} prefetch completed in ${(performance.now() - prefetchGenStart).toFixed(0)}ms (${chunks[prefetchIdx].text.length} chars)`);
             return result;
           }).catch(err => {
             if (err.message !== 'Aborted') console.error('Prefetch failed:', err);
@@ -457,7 +483,7 @@ const TourGuideGenerator = () => {
           }
         };
 
-        setCurrentParagraphIndex(i);
+        setCurrentParagraphIndex(chunks[i].paragraphIndex);
         await audioRef.current.play();
 
         // Wait for audio to end or abort
@@ -476,8 +502,8 @@ const TourGuideGenerator = () => {
 
         if (abortController.signal.aborted) break;
 
-        // Pause between paragraphs
-        if (i + 1 < paragraphs.length) {
+        // Pause between paragraphs (not between chunks within the same paragraph)
+        if (i + 1 < chunks.length && chunks[i].paragraphIndex !== chunks[i + 1].paragraphIndex) {
           await new Promise(resolve => {
             const timer = setTimeout(resolve, 300);
             const onAbort = () => { clearTimeout(timer); resolve(); };

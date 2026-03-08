@@ -36,7 +36,8 @@ async def generate_tour_guide(location: Location):
         # Log the location request to /tmp/locations.txt
         import datetime
         timestamp = datetime.datetime.now().isoformat()
-        log_entry = f"{timestamp}: {location.location}\n"
+        tour_type = "long" if location.length > 500 else "short"
+        log_entry = f"{timestamp}: {location.location} ({tour_type})\n"
 
         try:
             with open("/tmp/locations.txt", "a") as log_file:

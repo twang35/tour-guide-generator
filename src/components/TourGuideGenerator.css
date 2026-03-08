@@ -164,7 +164,7 @@ button:hover:not(:disabled) {
   padding: 1.5rem;
   border-radius: 8px;
   margin-top: 1.5rem;
-  max-height: 400px;
+  max-height: 500px;
   overflow-y: auto;
   border: 1px solid #e9ecef;
 }
@@ -353,7 +353,7 @@ pre {
   }
   
   .tour-guide-output {
-    max-height: 300px;
+    max-height: 60vh;
   }
   
   .wrench-container {

@@ -111,7 +111,9 @@ tours.tony-wang.com {
  
 sudo systemctl restart caddy
 
-### pip and uvicorn
+### conda, pip, and uvicorn
+conda create -n audio-tour python=3.13
+conda activate audio-tour
 conda install pip
 
 pip3 --version
@@ -126,6 +128,7 @@ disown
 ### Kill old instances
 
 `ps -ef`
+kill 1658
 
 kill each of the following processes: 
 * /home/g35tonywang/miniconda3/envs/tonys-tours/bin/python3.13 /home/g35tonywang/miniconda3/envs/tonys-tours/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8000

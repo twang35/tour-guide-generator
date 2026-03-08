@@ -70,6 +70,7 @@ const TourGuideGenerator = () => {
   const [ttsEngine, setTtsEngine] = useState(isMobile ? 'browser' : 'kokoro-webgpu');
   const [kokoroVoice, setKokoroVoice] = useState(DEFAULT_KOKORO_VOICE);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [longerTour, setLongerTour] = useState(false);
   const [webgpuSupported, setWebgpuSupported] = useState(false);
   const [webgpuModelStatus, setWebgpuModelStatus] = useState('idle'); // 'idle' | 'loading' | 'ready' | 'error'
   const [webgpuLoadProgress, setWebgpuLoadProgress] = useState(null);
@@ -210,7 +211,7 @@ const TourGuideGenerator = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ location }),
+        body: JSON.stringify({ location, length: longerTour ? 3500 : 500 }),
       });
 
       if (!response.ok) {
@@ -236,7 +237,7 @@ const TourGuideGenerator = () => {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ location }),
+          body: JSON.stringify({ location, length: longerTour ? 3500 : 500 }),
         });
 
         if (!response.ok) {
@@ -622,6 +623,18 @@ const TourGuideGenerator = () => {
         <button onClick={generateTourGuide} disabled={isLoading || !location}>
           {isLoading ? 'Generating...' : 'Generate Tour'}
         </button>
+      </div>
+      <div className="tour-length-toggle">
+        <label className="toggle-label">
+          <input
+            type="checkbox"
+            checked={longerTour}
+            onChange={(e) => setLongerTour(e.target.checked)}
+            disabled={isLoading}
+          />
+          <span className="toggle-switch"></span>
+          Longer tour
+        </label>
       </div>
       
       {isLoading && (

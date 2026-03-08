@@ -28,6 +28,7 @@ app.add_middleware(
 
 class Location(BaseModel):
     location: str
+    length: int = 500
 
 @app.post("/generate-tour-guide")
 async def generate_tour_guide(location: Location):
@@ -56,7 +57,7 @@ async def generate_tour_guide(location: Location):
 
         model = "gemini-3.1-flash-lite-preview" if debug_mode else "gemini-3-flash-preview"
 
-        length = 500 if debug_mode else 3500
+        length = 500 if debug_mode else location.length
 
         # Format the location into the prompt
         prompt = f"""

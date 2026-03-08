@@ -28,10 +28,10 @@ const KOKORO_VOICES = [
   { id: 'am_santa', name: 'Santa (Male)' },
 ];
 
-const TourGuideGenerator = () => {
-  const isMobile = window.matchMedia('(max-width: 768px)').matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  console.log(`[Mobile Detection] isMobile=${isMobile}, screenWidth=${window.innerWidth}, userAgent=${navigator.userAgent}`);
+const isMobile = window.matchMedia('(max-width: 768px)').matches || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+console.log(`[Mobile Detection] isMobile=${isMobile}, screenWidth=${window.innerWidth}, userAgent=${navigator.userAgent}`);
 
+const TourGuideGenerator = () => {
   const [location, setLocation] = useState('');
   const [tourGuideText, setTourGuideText] = useState('');
   const [isLoading, setIsLoading] = useState(false);

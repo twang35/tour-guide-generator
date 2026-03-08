@@ -29,6 +29,8 @@ const KOKORO_VOICES = [
 ];
 
 const TourGuideGenerator = () => {
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+
   const [location, setLocation] = useState('');
   const [tourGuideText, setTourGuideText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -38,7 +40,7 @@ const TourGuideGenerator = () => {
   const [availableVoices, setAvailableVoices] = useState([]);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(-1);
   const [currentParagraphIndex, setCurrentParagraphIndex] = useState(-1);
-  const [ttsEngine, setTtsEngine] = useState('kokoro-webgpu');
+  const [ttsEngine, setTtsEngine] = useState(isMobile ? 'browser' : 'kokoro-webgpu');
   const [kokoroVoice, setKokoroVoice] = useState(DEFAULT_KOKORO_VOICE);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [webgpuSupported, setWebgpuSupported] = useState(false);
@@ -82,6 +84,7 @@ const TourGuideGenerator = () => {
   const webgpuInitStarted = useRef(false);
   useEffect(() => {
     const initWebGPU = async () => {
+      if (isMobile) return;
       if (webgpuInitStarted.current) return;
       webgpuInitStarted.current = true;
       if (!navigator.gpu) return;
@@ -190,7 +193,7 @@ const TourGuideGenerator = () => {
       const data = await response.json();
       console.log(`[TextGen] Generated tour text in ${(performance.now() - textGenStart).toFixed(0)}ms`);
       setTourGuideText(data.tour_guide_text);
-      prefetchFirstParagraphAudio(data.tour_guide_text);
+      if (!isMobile) prefetchFirstParagraphAudio(data.tour_guide_text);
 
     } catch (error) {
       console.error('Production backend failed, trying fallback:', error);
@@ -216,7 +219,7 @@ const TourGuideGenerator = () => {
         const data = await response.json();
         console.log(`[TextGen] Generated tour text (fallback) in ${(performance.now() - textGenStartFallback).toFixed(0)}ms`);
         setTourGuideText(data.tour_guide_text);
-        prefetchFirstParagraphAudio(data.tour_guide_text);
+        if (!isMobile) prefetchFirstParagraphAudio(data.tour_guide_text);
 
       } catch (fallbackError) {
         console.error('Fallback backend also failed:', fallbackError);
@@ -622,9 +625,11 @@ const TourGuideGenerator = () => {
                   disabled={isSpeaking || isGeneratingAudio}
                 >
                   <option value="browser">Browser TTS</option>
-                  <option value="kokoro-webgpu" disabled={!webgpuSupported}>
-                    Kokoro WebGPU{!webgpuSupported ? ' (not supported)' : ''}
-                  </option>
+                  {!isMobile && (
+                    <option value="kokoro-webgpu" disabled={!webgpuSupported}>
+                      Kokoro WebGPU{!webgpuSupported ? ' (not supported)' : ''}
+                    </option>
+                  )}
                 </select>
               </div>
               {webgpuModelStatus === 'loading' && ttsEngine === 'kokoro-webgpu' && (

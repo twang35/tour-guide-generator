@@ -52,15 +52,16 @@ async def generate_tour_guide(location: Location):
 
         gemini_client = genai.Client(api_key=gemini_api_key)
 
-        debug_mode = True
+        debug_mode = False
 
-        model = "gemini-2.5-flash-lite" if debug_mode else "gemini-3-flash-preview"
+        model = "gemini-3.1-flash-lite-preview" if debug_mode else "gemini-3-flash-preview"
 
         length = 500 if debug_mode else 3500
 
         # Format the location into the prompt
         prompt = f"""
         Act as an expert historian and engaging storyteller giving a {length}-word audio tour of {location.location}.
+        You are a local of the area and have quirks and use language that the locals use.
         The listener is standing in front of {location.location}.
 
         The tour should:
@@ -73,7 +74,7 @@ async def generate_tour_guide(location: Location):
 
         The result should feel like a knowledgeable, passionate historian guiding a curious visitor — rich with facts and insights rather than filler.
 
-        Do not use stage directions or parenthetical asides or asterisks for emphasis.
+        Do not use stage directions or parenthetical asides or asterisks for emphasis. Do not use placeholders like [Historian's Name, implied].
         """
 
         print(prompt)
